@@ -39,19 +39,27 @@ All paths relative to the repository root.
 - Forbid unsafe code where practical. New unsafe / FFI / build scripts /
   proc-macros require an explicit safety contract, focused tests, and human
   review.
+- **`cargo evaluate` is part of the test harness.** The justfile `check` recipe
+  and CI run `cargo evaluate` (deterministic + semantic lint packs) alongside
+  `cargo test`, `clippy`, and `fmt --check`. Treat an evaluate failure like a
+  clippy failure — do not merge past it. Rule exceptions go in `evaluate.toml`,
+  not by silencing the harness.
 
 ## Planning and agent workflow
 
 Before planning or changing Driftwatch work, read:
 
-1. `docs/roadmap.md` — the migration plan and current phase.
-2. The relevant PR's scope and acceptance criteria in the roadmap.
+1. `docs/README.md` — the planning-doc index.
+2. `docs/roadmap.md` — the migration plan and current phase.
+3. `docs/digests/llm.md` — operational facts and decision boundaries for agents.
+4. The relevant PR's scope and acceptance criteria in the roadmap.
 
 Use `.github/agents/driftwatch-orchestrator.agent.md` as the default delivery
-controller. It runs an **observe → plan → act → verify** loop and delegates to
-tool-scoped specialist agents (planner, implementer, reviewer) that apply the
-repository skills under `.github/skills`. Human PR review remains the
-acceptance gate.
+controller. It runs an **observe → plan → act → verify** loop (documented in
+`docs/agentic-loop.md`) and delegates to tool-scoped specialist agents (planner,
+implementer, reviewer) that apply the repository skills under `.github/skills`.
+Verification includes running the harness (`cargo test` + `cargo evaluate` +
+`clippy` + `fmt --check`). Human PR review remains the acceptance gate.
 
 Do not silently finalize the load-bearing contracts — the artifact format, the
 trace canonicalization rules, and the CLI surface — while implementing a bounded

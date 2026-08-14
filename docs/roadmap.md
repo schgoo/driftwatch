@@ -75,10 +75,14 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
 ### Phase 0 — preserve & scaffold
 - **PR0** — commit the SpecGate #36 work to its branch (preserve the source we lift from). *(separate repo)*
 - **PR1** — driftwatch scaffold: `rust/` workspace, `rust/crates/`, justfile
-  (build/test/clippy/fmt), Rust-only CI, licenses, `.gitignore`, toolchain,
-  README — **plus the agent loop** (`AGENTS.md` + `.github/agents/*.agent.md`
-  observe-plan-act-verify orchestrator + planner/implementer/reviewer
-  specialists + `.github/skills/`), modeled on `~/repos/dcf`. ✚ ~400
+  (build/test/clippy/fmt + **`evaluate`**), Rust-only CI, licenses, `.gitignore`,
+  toolchain, README — **plus the agent loop** (`AGENTS.md` +
+  `.github/agents/*.agent.md` observe-plan-act-verify orchestrator +
+  planner/implementer/reviewer specialists + `.github/skills/`) and the
+  **planning-doc tree** (`docs/README.md`, `docs/agentic-loop.md`,
+  `docs/digests/{human,llm}.md`, `docs/references.md`) — modeled on
+  `~/repos/dcf`. Wire **`cargo evaluate`** into the `check` recipe + CI as a
+  harness gate (with a starter `evaluate.toml`). ✚ ~450
 
 ### Phase 1 — emitter (extraction TCB)
 - **PR2** — `driftwatch-runtime` pt1: `Value` (+`ToSpecValue`, `From`, serde, `Debug`) + `TraceEvent`; bring #36 encoder edge tests. ▪ ~450
