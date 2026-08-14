@@ -70,6 +70,9 @@ artifacts as false drift.
 
 ## PR breakdown (target ≤500 net LoC each)
 
+> Tracked as GitHub issues **[#1–#20](https://github.com/schgoo/driftwatch/issues)** —
+> PR_k_ = issue #_k_.
+
 Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
 
 ### Phase 0 — preserve & scaffold
