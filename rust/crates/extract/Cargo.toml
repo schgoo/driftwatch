@@ -1,0 +1,12 @@
+[package]
+name = "extract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Driftwatch extraction driver: binding resolution, runner codegen, build+run+collect, and contract discovery."
+
+[lints]
+workspace = true

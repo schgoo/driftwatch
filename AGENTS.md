@@ -18,14 +18,14 @@ format, salvage map, and PR-by-PR migration plan. **Read the roadmap first.**
 All paths relative to the repository root.
 
 - `rust/` — the Rust workspace. Crates live in `rust/crates/`.
-  - `driftwatch-runtime` — the emitter: trace buffer, `Value` encoding,
+  - `runtime` — the emitter: trace buffer, `Value` encoding,
     `SpecEvent`, link-time registry, JSONL record mode.
-  - `driftwatch-annotations(-macros)` — the annotation surface.
-  - `driftwatch-contract` — contract (`.contract.yaml`) parsing + validation.
-  - `driftwatch-extract` — extraction driver: binding-resolve, codegen,
+  - `annotations(-macros)` — the annotation surface.
+  - `contract` — contract (`.contract.yaml`) parsing + validation.
+  - `extract` — extraction driver: binding-resolve, codegen,
     build+run+collect, `discover`.
-  - `driftwatch-diff` — contract-diff + trace-diff.
-  - `driftwatch-cli` — `snapshot`, `compare`, and `--mode full/diff/pr`.
+  - `diff` — contract-diff + trace-diff.
+  - `cli` — `snapshot`, `compare`, and `--mode full/diff/pr`.
 - `csharp/` — the C# emitter (weaver + runtime) for cross-language extraction.
 - `docs/` — design docs and the migration roadmap.
 

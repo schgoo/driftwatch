@@ -1,0 +1,16 @@
+# Rust
+/rust/target/
+**/*.rs.bk
+
+# C#
+[Bb]in/
+[Oo]bj/
+
+# cargo-evaluate
+/rust/.evaluate/*
+/rust/evaluate-report.*
+/rust/evaluate-summary.json
+
+# OS / editor
+.DS_Store
+Thumbs.db

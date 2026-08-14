@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/schgoo/driftwatch"
+authors = ["Driftwatch contributors"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+# Shared dependencies are declared here; member crates opt in with
+# `{crate}.workspace = true`.
+[workspace.dependencies]

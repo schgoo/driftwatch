@@ -55,9 +55,9 @@ diff algorithms: structural set-diff (contract) and keyed sequence/value diff
 
 | Take (▪ lift · ⚠ refactor) | Leave behind |
 |---|---|
-| ▪ `specgate-runtime` → `driftwatch-runtime` (buffer, `Value`, `SpecEvent`, registry, JSONL) | matcher + operator catalog (`$gt`, `$unordered`, …) |
+| ▪ `specgate-runtime` → `runtime` (buffer, `Value`, `SpecEvent`, registry, JSONL) | matcher + operator catalog (`$gt`, `$unordered`, …) |
 | ▪ `specgate-annotations(-macros)` | `expected:` cases, narrative/level/provenance |
-| ⚠ `specgate-types` → `driftwatch-contract` (strip `cases`) | self-host / conformance authored ledgers |
+| ⚠ `specgate-types` → `contract` (strip `cases`) | self-host / conformance authored ledgers |
 | ⚠ harness driver slice: binding-resolve + codegen + build+run+collect + `discover` | `validate` case-runnability, `extract --cases` |
 | ▪ C# `SpecGate.Weaver` + `SpecGate.Runtime` | spec-case codegen, the matcher tail of `run_spec` |
 | ▪ the #36 trace goldens + encoder edge tests (the extraction TCB) | |
@@ -88,13 +88,13 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
   harness gate (with a starter `evaluate.toml`). ✚ ~450
 
 ### Phase 1 — emitter (extraction TCB)
-- **PR2** — `driftwatch-runtime` pt1: `Value` (+`ToSpecValue`, `From`, serde, `Debug`) + `TraceEvent`; bring #36 encoder edge tests. ▪ ~450
-- **PR3** — `driftwatch-runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, JSONL record, mock table, registry (`OpMeta`/`TypeMeta`/`discovery_json`), `SpecEvent`. ▪ ~450
-- **PR4** — `driftwatch-annotations(-macros)` + facade re-exports. *(decision: keep `spec_*` names or rename `dw_*`)* ▪ ~450
+- **PR2** — `runtime` pt1: `Value` (+`ToSpecValue`, `From`, serde, `Debug`) + `TraceEvent`; bring #36 encoder edge tests. ▪ ~450
+- **PR3** — `runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, JSONL record, mock table, registry (`OpMeta`/`TypeMeta`/`discovery_json`), `SpecEvent`. ▪ ~450
+- **PR4** — `annotations(-macros)` + facade re-exports. *(decision: keep `spec_*` names or rename `dw_*`)* ▪ ~450
 - **PR5** — minimal fixtures + lift the 51 trace goldens (emission trust anchor). ▪ ~400
 
 ### Phase 2 — contract
-- **PR6** — `driftwatch-contract`: lift types, strip `cases`, keep name/types/operations/binding + validation; `.spec.yaml`→`.contract.yaml`. ⚠ ~450
+- **PR6** — `contract`: lift types, strip `cases`, keep name/types/operations/binding + validation; `.spec.yaml`→`.contract.yaml`. ⚠ ~450
 
 ### Phase 3 — extraction driver (drop the matcher)
 - **PR7** — binding resolution (drop matcher bits). ▪ ~350
