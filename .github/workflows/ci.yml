@@ -1,0 +1,55 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.0"
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build
+        working-directory: rust
+        run: cargo build --workspace --all-targets
+      - name: Tests
+        working-directory: rust
+        run: cargo test --workspace
+      - name: Clippy
+        if: success() || failure()
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Format
+        if: success() || failure()
+        working-directory: rust
+        run: cargo fmt -- --check
+      # cargo-evaluate is part of the harness (see AGENTS.md). It is an internal
+      # tool, so the step runs only when the binary is available on the runner;
+      # locally `just check` always runs it. Wire up installation here once the
+      # tool's distribution is available to CI.
+      - name: Evaluate
+        if: success() || failure()
+        working-directory: rust
+        shell: bash
+        run: |
+          if command -v cargo-evaluate >/dev/null 2>&1; then
+            cargo evaluate
+          else
+            echo "cargo-evaluate not installed on this runner — skipping (run 'just evaluate' locally)."
+          fi

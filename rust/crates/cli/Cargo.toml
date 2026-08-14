@@ -1,0 +1,16 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Driftwatch CLI: snapshot, compare, and --mode full/diff/pr."
+
+[[bin]]
+name = "driftwatch"
+path = "src/main.rs"
+
+[lints]
+workspace = true
