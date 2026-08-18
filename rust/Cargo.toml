@@ -70,3 +70,6 @@ cargo_common_metadata = "allow"
 # absent until the artifact format is chosen (see the artifact-format issue) —
 # the runtime defines only in-memory trace types.
 [workspace.dependencies]
+# Link-time distributed slices: the runtime's operation/type registry is
+# populated across compilation units and iterated by discovery.
+linkme = "0.3"

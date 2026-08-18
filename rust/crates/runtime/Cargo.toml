@@ -8,5 +8,8 @@ repository.workspace = true
 authors.workspace = true
 description = "Driftwatch runtime: the structured trace Value, TraceEvent, and the ToValue conversion trait."
 
+[dependencies]
+linkme.workspace = true
+
 [lints]
 workspace = true

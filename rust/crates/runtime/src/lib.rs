@@ -19,6 +19,18 @@
 //! - [`ToValue`] — converts an annotated Rust value into a [`Value`]; this is
 //!   the conversion the emit macros invoke.
 //!
+//! # Emission and discovery
+//!
+//! On top of the trace types this crate provides the machinery the annotation
+//! macros expand into: a thread-local trace buffer ([`emit_event`],
+//! [`emit_event_v`], [`emit_run`], [`take_traces`], [`reset`]), a per-thread
+//! mock table ([`set_mock`], [`mock_lookup`]), the [`SpecEvent`] field-emission
+//! trait, the [`ReturnEmit`] autoref-specialization ladder for `$result`
+//! emission, and the link-time operation/type registry ([`OpMeta`] /
+//! [`TypeMeta`] via [`discovery_json`]) the extraction driver reads to derive a
+//! contract. The buffer holds in-memory events only — persisting a capture is
+//! the artifact layer's job (see below).
+//!
 //! # Comparison
 //!
 //! [`Value`] implements strict, structural equality and a matching total order.
@@ -58,10 +70,28 @@
 //! assert_eq!(event.name(), "$result");
 //! ```
 
+mod buffer;
+mod mock;
+mod registry;
+mod return_emit;
+mod spec_event;
 mod to_value;
 mod trace_event;
 mod value;
 
+pub use buffer::{emit_event, emit_event_v, emit_run, reset, take_traces};
+pub use mock::{mock_lookup, set_mock};
+pub use registry::{
+    DRIFTWATCH_OPS, DRIFTWATCH_TYPES, FieldMeta, OpMeta, TypeMeta, VariantMeta, discovery_json,
+};
+pub use return_emit::{
+    ReturnEmit, ReturnEmitDisplay, ReturnEmitNone, ReturnEmitStruct, ReturnEmitToValue,
+};
+pub use spec_event::{SpecEvent, SpecEventStruct};
 pub use to_value::ToValue;
 pub use trace_event::TraceEvent;
 pub use value::Value;
+
+/// Re-exported for macro-generated code, which references `linkme` paths when
+/// registering operations and types into the link-time registry.
+pub use linkme;
