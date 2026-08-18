@@ -3,12 +3,11 @@
 //! Every annotated operation pushes [`TraceEvent`]s onto a per-thread
 //! [`BUFFER`]; the extraction driver drains them with [`take_traces`] after
 //! running the operation. The buffer holds in-memory events only — there is no
-//! serialization or record sink here. [`reset`] clears both the buffer and the
-//! mock table between operations.
+//! serialization or record sink here. [`reset`] clears the buffer between
+//! operations.
 
 use std::cell::RefCell;
 
-use crate::mock::clear_mocks;
 use crate::{TraceEvent, Value};
 
 thread_local! {
@@ -53,11 +52,10 @@ pub fn take_traces() -> Vec<TraceEvent> {
     BUFFER.with(|b| std::mem::take(&mut *b.borrow_mut()))
 }
 
-/// Clear the thread-local trace buffer and every registered mock. Called
-/// between operations so captures do not leak into one another.
+/// Clear the thread-local trace buffer. Called between operations so captures
+/// do not leak into one another.
 pub fn reset() {
     BUFFER.with(|b| b.borrow_mut().clear());
-    clear_mocks();
 }
 
 #[cfg(test)]

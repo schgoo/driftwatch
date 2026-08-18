@@ -23,9 +23,9 @@
 //!
 //! On top of the trace types this crate provides the machinery the annotation
 //! macros expand into: a thread-local trace buffer ([`emit_event`],
-//! [`emit_event_v`], [`emit_run`], [`take_traces`], [`reset`]), a per-thread
-//! mock table ([`set_mock`], [`mock_lookup`]), the [`SpecEvent`] field-emission
-//! trait, the [`ReturnEmit`] autoref-specialization ladder for `$result`
+//! [`emit_event_v`], [`emit_run`], [`take_traces`], [`reset`]), the
+//! [`SpecEvent`] field-emission trait, the [`ReturnEmit`]
+//! autoref-specialization ladder for `$result`
 //! emission, and the link-time operation/type registry ([`OpMeta`] /
 //! [`TypeMeta`] via [`discovery_json`]) the extraction driver reads to derive a
 //! contract. The buffer holds in-memory events only — persisting a capture is
@@ -71,7 +71,6 @@
 //! ```
 
 mod buffer;
-mod mock;
 mod registry;
 mod return_emit;
 mod spec_event;
@@ -80,7 +79,6 @@ mod trace_event;
 mod value;
 
 pub use buffer::{emit_event, emit_event_v, emit_run, reset, take_traces};
-pub use mock::{mock_lookup, set_mock};
 pub use registry::{
     DRIFTWATCH_OPS, DRIFTWATCH_TYPES, FieldMeta, OpMeta, TypeMeta, VariantMeta, discovery_json,
 };
