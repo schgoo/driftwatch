@@ -1,18 +1,12 @@
 [package]
-name = "driftwatch-runtime"
+name = "runtime"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Driftwatch emitter: trace buffer, Value encoding, SpecEvent, link-time registry, JSONL record mode."
-
-[dependencies]
-serde.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true
+description = "Driftwatch runtime: the structured trace Value, TraceEvent, and the ToValue conversion trait."
 
 [lints]
 workspace = true

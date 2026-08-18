@@ -6,13 +6,7 @@
 # silenced ad hoc.
 
 [config]
-disabled = [
-  # serde is a core, non-optional dependency of Driftwatch: the trace/contract
-  # artifact format IS serde-based, so every `Value`/`TraceEvent` is serialized.
-  # Feature-gating the serde impls would be pure ceremony. Deliberate.
-  "m_dont_leak_types",
-  # Package names use the conventional hyphenated form (`driftwatch-runtime`),
-  # which Cargo maps to the `driftwatch_runtime` library name automatically.
-  # Hyphenated package names are idiomatic across the ecosystem.
-  "library_name",
-]
+# No globally disabled rules. Scope any genuinely-necessary exception as narrowly
+# as possible — prefer an in-source `#[cfg_attr(false, allow(evaluate::<rule>))]`
+# marker on the specific item over a workspace-wide entry here.
+disabled = []

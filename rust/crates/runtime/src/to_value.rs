@@ -17,7 +17,7 @@ use crate::Value;
 /// # Examples
 ///
 /// ```
-/// use driftwatch_runtime::{ToValue, Value};
+/// use runtime::{ToValue, Value};
 ///
 /// assert_eq!(42_i32.to_value(), Value::Integer(42));
 /// assert_eq!("hi".to_value(), Value::String("hi".into()));

@@ -20,10 +20,12 @@ behavior — no hand-authored assertion to weaken.
 
 ## Invariants
 
-- Trace goldens assert on derived `Debug`, never `Value` `PartialEq` (loose:
-  Int==Float, List==Set) and never the serde wire form (Set serializes like
-  List; NaN not JSON-representable). These are the F1/F2/F3 canonicalization
-  findings carried from SpecGate #36.
+- `Value` has strict, structural `Eq`/`Ord` (PR2 #2): equal iff same variant and
+  contents; `eq` is `cmp(..) == Equal`. SpecGate's loose equality (Int==Float,
+  List==Set) was removed, so `==` is a faithful comparison here (this resolves
+  the old F3). The serde wire form is still lossy — a `Set` serializes like a
+  `List`, and `NaN`/`Inf` are not JSON-representable (the standing F1/F2) — so it
+  is for persistence, not comparison.
 - Contract extraction is static/complete/deterministic; trace extraction is
   dynamic/coverage-limited and must be canonicalized before diffing.
 - One artifact per code version: `{contract, traces[keyed]}`. The trace key

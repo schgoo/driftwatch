@@ -55,7 +55,7 @@ diff algorithms: structural set-diff (contract) and keyed sequence/value diff
 
 | Take (▪ lift · ⚠ refactor) | Leave behind |
 |---|---|
-| ▪ `specgate-runtime` → `runtime` (buffer, `Value`, `SpecEvent`, registry, JSONL) | matcher + operator catalog (`$gt`, `$unordered`, …) |
+| ▪ `specgate-runtime` → `runtime` (buffer, `Value`, `SpecEvent`, registry) | matcher + operator catalog (`$gt`, `$unordered`, …); the lossy `serde_json` record mode |
 | ▪ `specgate-annotations(-macros)` | `expected:` cases, narrative/level/provenance |
 | ⚠ `specgate-types` → `contract` (strip `cases`) | self-host / conformance authored ledgers |
 | ⚠ harness driver slice: binding-resolve + codegen + build+run+collect + `discover` | `validate` case-runnability, `extract --cases` |
@@ -88,22 +88,34 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
   harness gate (with a starter `evaluate.toml`). ✚ ~450
 
 ### Phase 1 — emitter (extraction TCB)
-- **PR2** — `runtime` pt1: `Value` (+`ToSpecValue`, `From`, serde, `Debug`) + `TraceEvent`; bring #36 encoder edge tests. ▪ ~450
-- **PR3** — `runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, JSONL record, mock table, registry (`OpMeta`/`TypeMeta`/`discovery_json`), `SpecEvent`. ▪ ~450
+- **PR2** ✅ — `runtime` pt1: `Value` (strict structural `Eq`/`Ord`, `Debug`) + `TraceEvent` + `ToValue`; #36 encoder edge tests. Dropped SpecGate's loose equality and hand-written serde (serialization deferred to the artifact-format PR). ▪
+- **PR3** — `runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, mock table, registry (`OpMeta`/`TypeMeta`/discovery), `SpecEvent`. **No serialization** (no JSONL record mode — deferred to the artifact-format PR). ▪ ~400
 - **PR4** — `annotations(-macros)` + facade re-exports. *(decision: keep `spec_*` names or rename `dw_*`)* ▪ ~450
 - **PR5** — minimal fixtures + lift the 51 trace goldens (emission trust anchor). ▪ ~400
+- **PR5.5** *(gh #24)* — **mutation testing** capstone: `cargo-mutants` scoped to
+  the emitter TCB (`runtime` + `annotations(-macros)`), run against the native
+  encoder tests + trace goldens only (non-circular oracle), survivors triaged to
+  zero. The "measure the trust anchor" gate — SpecGate #36 Rung 4 analog. Depends
+  on PR5 (the goldens are the kill oracle). ✚
+
+### Phase 1.5 — artifact format (reprioritized; load-bearing)
+- **PR11** *(moved earlier from Phase 4)* — **artifact serialization format** +
+  keyed trace model. The format must round-trip `Value`/`TraceEvent` faithfully
+  (Set≠List, `NaN`/`Inf`/`-0.0`), so JSON is unsuitable: use **derived** serde
+  over a **binary self-describing** format (CBOR/postcard/bincode), never
+  hand-written serde. Keyed runs `{key, inputs?, events[]}` + key derivation.
+  Foundational — every persistence path (record, collect, snapshot, compare)
+  depends on it. ✚ load-bearing
 
 ### Phase 2 — contract
 - **PR6** — `contract`: lift types, strip `cases`, keep name/types/operations/binding + validation; `.spec.yaml`→`.contract.yaml`. ⚠ ~450
 
 ### Phase 3 — extraction driver (drop the matcher)
 - **PR7** — binding resolution (drop matcher bits). ▪ ~350
-- **PR8** — runner codegen: drive ops → dump JSONL traces, no `expected:`/matcher. ⚠ ~450
+- **PR8** — runner codegen: drive ops → emit traces (artifact format, no `expected:`/matcher). ⚠ ~450
 - **PR9** — build+run+collect: invoke cargo/dotnet, capture keyed traces (`run_spec` front half minus match tail). ⚠ ~400
 - **PR10** — contract extraction: `discover` slice (registry → normalized schema). ▪ ~350
 
-### Phase 4 — trace artifact + keying (new)
-- **PR11** — keyed trace artifact: `{key, inputs?, events[]}`, (de)serialize, key derivation. ✚ ~350
 
 ### Phase 5 — diff (new)
 - **PR12** — contract-diff: structural diff + breaking-change classification + report. ✚ ~450
@@ -128,10 +140,14 @@ branches after Phase 1.
 **Fastest path to a real demo (contract-diff — cheap, un-gameable, no trace
 driver or C# needed):** PR1 → PR6 → PR10 → PR12 → PR14 → PR15.
 
+Mutation testing (PR5.5, #24) gates the emitter TCB once its goldens exist; it is
+an on-demand / periodic run (`just mutants`), not a per-PR gate, because mutation
+runs are slow.
+
 ## Open decisions
 
 1. Macro naming: keep `spec_*` or rename `dw_*`.
-2. Artifact extension/format: `.dw`? JSON vs keyed-JSONL.
+2. Artifact format: binary self-describing (CBOR/postcard/bincode) via derived serde — must be faithful (Set≠List, floats); extension (`.dw`?). Owned by the artifact-format PR (#11). ✅ direction set (see #11).
 3. Ship contract-diff before trace-diff (recommended — metadata drift is the
    cheap, always-available, coverage-independent first product).
 

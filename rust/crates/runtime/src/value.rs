@@ -1,8 +1,5 @@
 //! The structured trace [`Value`] and its encoding.
 
-use serde::de::{self, MapAccess, SeqAccess, Visitor};
-use serde::ser::{SerializeMap, SerializeSeq};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -15,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// # Examples
 ///
 /// ```
-/// use driftwatch_runtime::Value;
+/// use runtime::Value;
 ///
 /// let v = Value::List(vec![Value::Integer(1), Value::Bool(true)]);
 /// assert_eq!(format!("{v:?}"), "List([Integer(1), Bool(true)])");
@@ -111,153 +108,6 @@ impl Ord for Value {
     }
 }
 
-impl std::fmt::Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::String(s) => write!(f, "{s}"),
-            Value::Integer(i) => write!(f, "{i}"),
-            Value::Float(x) => write!(f, "{x}"),
-            Value::Bool(b) => write!(f, "{b}"),
-            Value::List(items) => {
-                write!(f, "[")?;
-                for (i, v) in items.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ",")?;
-                    }
-                    write_atom(f, v)?;
-                }
-                write!(f, "]")
-            }
-            Value::Set(items) => {
-                write!(f, "[")?;
-                for (i, v) in items.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ",")?;
-                    }
-                    write_atom(f, v)?;
-                }
-                write!(f, "]")
-            }
-            Value::Map(map) => {
-                write!(f, "{{")?;
-                for (i, (k, v)) in map.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ",")?;
-                    }
-                    write!(f, "\"{k}\":")?;
-                    write_atom(f, v)?;
-                }
-                write!(f, "}}")
-            }
-        }
-    }
-}
-
-fn write_atom(f: &mut std::fmt::Formatter<'_>, v: &Value) -> std::fmt::Result {
-    match v {
-        Value::String(s) => write!(f, "\"{s}\""),
-        other => write!(f, "{other}"),
-    }
-}
-
-// --- Serialize ------------------------------------------------------------
-
-impl Serialize for Value {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Value::String(v) => serializer.serialize_str(v),
-            Value::Integer(v) => serializer.serialize_i64(*v),
-            Value::Float(v) => serializer.serialize_f64(*v),
-            Value::Bool(v) => serializer.serialize_bool(*v),
-            Value::List(items) => {
-                let mut seq = serializer.serialize_seq(Some(items.len()))?;
-                for it in items {
-                    seq.serialize_element(it)?;
-                }
-                seq.end()
-            }
-            Value::Set(items) => {
-                // Sets serialize as ordered arrays; a round-trip yields a
-                // Value::List (see the module-level note on the lossy serde form).
-                let mut seq = serializer.serialize_seq(Some(items.len()))?;
-                for it in items {
-                    seq.serialize_element(it)?;
-                }
-                seq.end()
-            }
-            Value::Map(map) => {
-                let mut m = serializer.serialize_map(Some(map.len()))?;
-                for (k, v) in map {
-                    m.serialize_entry(k, v)?;
-                }
-                m.end()
-            }
-        }
-    }
-}
-
-// --- Deserialize ----------------------------------------------------------
-
-impl<'de> Deserialize<'de> for Value {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_any(ValueVisitor)
-    }
-}
-
-struct ValueVisitor;
-impl<'de> Visitor<'de> for ValueVisitor {
-    type Value = Value;
-    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("any JSON/YAML value")
-    }
-    fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
-        Ok(Value::Bool(v))
-    }
-    fn visit_i64<E: de::Error>(self, v: i64) -> Result<Self::Value, E> {
-        Ok(Value::Integer(v))
-    }
-    #[expect(
-        clippy::cast_possible_wrap,
-        reason = "values above i64::MAX are not expected in traces; wrap is accepted for the canonical i64 lattice"
-    )]
-    fn visit_u64<E: de::Error>(self, v: u64) -> Result<Self::Value, E> {
-        Ok(Value::Integer(v as i64))
-    }
-    fn visit_f64<E: de::Error>(self, v: f64) -> Result<Self::Value, E> {
-        Ok(Value::Float(v))
-    }
-    fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-        Ok(Value::String(v.to_string()))
-    }
-    fn visit_string<E: de::Error>(self, v: String) -> Result<Self::Value, E> {
-        Ok(Value::String(v))
-    }
-    fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-        Ok(Value::String(String::new()))
-    }
-    fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-        Ok(Value::String(String::new()))
-    }
-    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        Deserialize::deserialize(deserializer)
-    }
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-        let mut out = Vec::with_capacity(seq.size_hint().unwrap_or(0));
-        while let Some(v) = seq.next_element()? {
-            out.push(v);
-        }
-        out.shrink_to_fit();
-        Ok(Value::List(out))
-    }
-    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-        let mut out = BTreeMap::new();
-        while let Some((k, v)) = map.next_entry::<String, Value>()? {
-            out.insert(k, v);
-        }
-        Ok(Value::Map(out))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,6 +183,9 @@ mod tests {
         );
         // Equal only when structurally identical.
         assert_eq!(Value::Integer(3).cmp(&Value::Integer(3)), Ordering::Equal);
+        // The comparison operators (which route through `partial_cmp`) agree.
+        assert!(Value::Integer(1) < Value::Integer(2));
+        assert!(Value::Bool(true) < Value::Integer(0));
     }
 
     #[test]
@@ -342,12 +195,14 @@ mod tests {
     }
 
     #[test]
-    fn display_collections() {
-        let v = Value::List(vec![Value::Integer(1), Value::String("x".into())]);
-        assert_eq!(v.to_string(), r#"[1,"x"]"#);
-        let mut m = BTreeMap::new();
-        m.insert("k".to_string(), Value::Bool(true));
-        assert_eq!(Value::Map(m).to_string(), r#"{"k":true}"#);
+    fn type_names() {
+        assert_eq!(Value::String(String::new()).type_name(), "string");
+        assert_eq!(Value::Integer(0).type_name(), "int");
+        assert_eq!(Value::Float(0.0).type_name(), "float");
+        assert_eq!(Value::Bool(false).type_name(), "bool");
+        assert_eq!(Value::List(Vec::new()).type_name(), "list");
+        assert_eq!(Value::Map(BTreeMap::new()).type_name(), "map");
+        assert_eq!(Value::Set(BTreeSet::new()).type_name(), "set");
     }
 
     #[test]

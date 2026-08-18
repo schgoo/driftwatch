@@ -26,10 +26,7 @@ format:
 # Run cargo-evaluate (deterministic + semantic lint packs). Part of the harness
 # — a merge gate, not advisory. Rule exceptions live in rust/evaluate.toml.
 evaluate:
-    # `prefer_strum_derive` is a native rule not covered by evaluate.toml's
-    # `[config] disabled`; `Value`'s Display is recursive and cannot be derived
-    # by strum, so it is allowed here explicitly.
-    cd rust && cargo evaluate -A evaluate::prefer_strum_derive
+    cd rust && cargo evaluate
 
 # Full pre-PR gate: build, test, clippy, format, and evaluate.
 check: build test clippy format-check evaluate
