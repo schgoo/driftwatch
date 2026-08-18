@@ -33,8 +33,14 @@ All paths relative to the repository root.
 
 - All crate dependencies are declared in `rust/Cargo.toml`; member crates use
   `{crate}.workspace = true`.
-- Implementation code does not live in `mod.rs`; `mod.rs` only references and
-  re-exports sibling files.
+- Implementation lives in named, concern-scoped sibling files — never in
+  `mod.rs`, `lib.rs`, or `main.rs`. A crate root and any `mod.rs` only declare
+  modules and re-export public items (`mod value; pub use value::Value;`),
+  keeping each public item reachable through exactly one path (private `mod` +
+  `pub use`). Group by concern — roughly a primary type plus its impls per file
+  — and do not let one file accumulate unrelated subsystems as a crate grows.
+  (`cargo evaluate`'s `m_balanced_modules` checks the module *namespace*, not
+  physical file size, so this is our own convention.)
 - Avoid exposing a public item through more than one path.
 - Forbid unsafe code where practical. New unsafe / FFI / build scripts /
   proc-macros require an explicit safety contract, focused tests, and human

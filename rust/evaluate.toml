@@ -2,8 +2,17 @@
 #
 # `cargo evaluate` is part of the Driftwatch test harness (see AGENTS.md and
 # docs/agentic-loop.md): the `just check` recipe and CI run it as a merge gate
-# alongside test/clippy/fmt. Rule exceptions belong here, never silenced ad hoc.
+# alongside test/clippy/fmt. Exceptions belong here with a justification, never
+# silenced ad hoc.
 
 [config]
-# No exceptions yet. Add `disabled = ["rule_name"]` with a justifying comment
-# when a lint genuinely does not apply to this workspace.
+disabled = [
+  # serde is a core, non-optional dependency of Driftwatch: the trace/contract
+  # artifact format IS serde-based, so every `Value`/`TraceEvent` is serialized.
+  # Feature-gating the serde impls would be pure ceremony. Deliberate.
+  "m_dont_leak_types",
+  # Package names use the conventional hyphenated form (`driftwatch-runtime`),
+  # which Cargo maps to the `driftwatch_runtime` library name automatically.
+  # Hyphenated package names are idiomatic across the ecosystem.
+  "library_name",
+]

@@ -1,8 +1,7 @@
-//! `cli` — the `driftwatch` binary: `snapshot`, `compare`, and
-//! `--mode full/diff/pr` (modeled on `cargo evaluate`).
+//! The `driftwatch` command-line interface.
 //!
-//! Scaffold stub — implemented in roadmap PRs 14–16 (issues #14–#16).
+//! Provides `snapshot`, `compare`, and the `--mode full/diff/pr` orchestration.
 
 fn main() {
-    println!("driftwatch: scaffold — see docs/roadmap.md (PRs 14-16)");
+    println!("driftwatch: not yet implemented");
 }

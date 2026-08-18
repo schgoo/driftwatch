@@ -36,6 +36,15 @@ behavior — no hand-authored assertion to weaken.
 - CLI surface (`snapshot` / `compare` / `--mode full|diff|pr`).
 - Macro naming (`spec_*` vs `dw_*`).
 
+## File organization
+
+Implementation lives in named, concern-scoped sibling files; crate roots
+(`lib.rs`/`main.rs`) and `mod.rs` only declare modules and re-export
+(`mod value; pub use value::Value;`), one public path per item. `cargo
+evaluate`'s `m_balanced_modules` judges the module namespace, not physical file
+size, so a god-file `lib.rs` will NOT be flagged by the harness — this is a
+human-enforced convention (see `AGENTS.md`).
+
 ## Harness
 
 Every PR passes `cargo test` + `cargo evaluate` + `cargo clippy -D warnings` +
