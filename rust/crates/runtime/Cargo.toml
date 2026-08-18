@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Driftwatch emitter: trace buffer, Value encoding, SpecEvent, link-time registry, JSONL record mode."
+description = "Driftwatch runtime: the structured trace Value, TraceEvent, and the ToValue conversion trait."
 
 [lints]
 workspace = true

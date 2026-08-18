@@ -39,17 +39,6 @@ jobs:
         if: success() || failure()
         working-directory: rust
         run: cargo fmt -- --check
-      # cargo-evaluate is part of the harness (see AGENTS.md). It is an internal
-      # tool, so the step runs only when the binary is available on the runner;
-      # locally `just check` always runs it. Wire up installation here once the
-      # tool's distribution is available to CI.
-      - name: Evaluate
-        if: success() || failure()
-        working-directory: rust
-        shell: bash
-        run: |
-          if command -v cargo-evaluate >/dev/null 2>&1; then
-            cargo evaluate
-          else
-            echo "cargo-evaluate not installed on this runner — skipping (run 'just evaluate' locally)."
-          fi
+      # `cargo evaluate` is an internal tool that is not available on hosted CI
+      # runners, so it runs as the local pre-PR gate (`just check` / `just
+      # evaluate`) rather than in CI.

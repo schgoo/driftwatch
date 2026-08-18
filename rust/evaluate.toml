@@ -2,8 +2,11 @@
 #
 # `cargo evaluate` is part of the Driftwatch test harness (see AGENTS.md and
 # docs/agentic-loop.md): the `just check` recipe and CI run it as a merge gate
-# alongside test/clippy/fmt. Rule exceptions belong here, never silenced ad hoc.
+# alongside test/clippy/fmt. Exceptions belong here with a justification, never
+# silenced ad hoc.
 
 [config]
-# No exceptions yet. Add `disabled = ["rule_name"]` with a justifying comment
-# when a lint genuinely does not apply to this workspace.
+# No globally disabled rules. Scope any genuinely-necessary exception as narrowly
+# as possible — prefer an in-source `#[cfg_attr(false, allow(evaluate::<rule>))]`
+# marker on the specific item over a workspace-wide entry here.
+disabled = []

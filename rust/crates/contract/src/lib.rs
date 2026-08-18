@@ -1,5 +1,4 @@
-//! `contract` — the contract document (`.contract.yaml`): the
-//! static, verifiable API shape (types, operations, inputs/outputs, bindings).
-//! Parsing and validation live here.
+//! The Driftwatch contract document (`.contract.yaml`).
 //!
-//! Scaffold stub — implemented in roadmap PR6 (issue #6).
+//! A contract is the static, verifiable API shape — types, operations, inputs
+//! and outputs, and bindings. Parsing and validation live here.

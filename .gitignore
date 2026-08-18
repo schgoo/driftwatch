@@ -14,3 +14,6 @@
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# cargo-mutants output
+/rust/mutants.out*/

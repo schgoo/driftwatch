@@ -1,5 +1,4 @@
-//! `annotations` — the user-facing annotation surface. Re-exports
-//! the procedural macros and the runtime items they expand into, so user code
-//! depends on a single crate.
+//! The user-facing annotation surface for Driftwatch.
 //!
-//! Scaffold stub — implemented in roadmap PR4 (issue #4).
+//! Re-exports the procedural macros and the runtime items they expand into, so
+//! annotated code depends on a single crate.
