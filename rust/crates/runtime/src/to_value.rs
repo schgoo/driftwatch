@@ -45,7 +45,7 @@ impl ToValue for isize {
 impl ToValue for u64 {
     #[expect(
         clippy::cast_possible_wrap,
-        reason = "values above i64::MAX are not expected in traces; wrap is accepted for the canonical i64 lattice"
+        reason = "values above i64::MAX are not expected in captures; wrap is accepted for the canonical i64 lattice"
     )]
     fn to_value(&self) -> Value {
         Value::Integer(*self as i64)
@@ -55,7 +55,7 @@ impl ToValue for u64 {
 impl ToValue for usize {
     #[expect(
         clippy::cast_possible_wrap,
-        reason = "values above i64::MAX are not expected in traces; wrap is accepted for the canonical i64 lattice"
+        reason = "values above i64::MAX are not expected in captures; wrap is accepted for the canonical i64 lattice"
     )]
     fn to_value(&self) -> Value {
         Value::Integer(*self as i64)

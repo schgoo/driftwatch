@@ -1,7 +1,7 @@
 //! The link-time operation/type registry and its dependency-free JSON
 //! discovery form.
 //!
-//! Annotation macros register each operation and `SpecEvent` type into the
+//! Annotation macros register each operation and `Watchable` type into the
 //! [`DRIFTWATCH_OPS`] / [`DRIFTWATCH_TYPES`] distributed slices at link time;
 //! [`discovery_json`] serializes the collected metadata into a JSON string the
 //! extraction driver reads to derive a contract from annotated code.
@@ -39,7 +39,7 @@ pub struct OpMeta {
 }
 
 /// One named field with its (stringified) Rust type. Used for both operation
-/// parameters and `SpecEvent` struct/enum-variant fields.
+/// parameters and `Watchable` struct/enum-variant fields.
 pub type FieldMeta = (&'static str, &'static str);
 
 /// One enum variant: its name plus any named fields. Tuple and unit variants
@@ -56,10 +56,10 @@ pub struct VariantMeta {
     pub fields: &'static [FieldMeta],
 }
 
-/// Metadata about a struct/enum that derives `SpecEvent`.
+/// Metadata about a struct/enum that derives `Watchable`.
 ///
 /// `kind` is `"struct"` or `"enum"`. Structs populate `fields` (only
-/// `#[spec_event]`-tagged fields, honoring `#[spec_event(name = "…")]`); enums
+/// `#[watchable]`-tagged fields, honoring `#[watchable(name = "…")]`); enums
 /// populate `variants`.
 #[derive(Debug, Clone, Copy)]
 #[expect(
@@ -86,7 +86,7 @@ pub struct TypeMeta {
 #[linkme::distributed_slice]
 pub static DRIFTWATCH_OPS: [OpMeta];
 
-/// Link-time registry of `SpecEvent`-deriving types, populated across
+/// Link-time registry of `Watchable`-deriving types, populated across
 /// compilation units and iterated by [`discovery_json`].
 #[linkme::distributed_slice]
 pub static DRIFTWATCH_TYPES: [TypeMeta];

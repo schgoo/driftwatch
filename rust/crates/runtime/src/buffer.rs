@@ -1,20 +1,20 @@
-//! The thread-local trace buffer and the emit/drain API annotated code uses.
+//! The thread-local event buffer and the emit/drain API annotated code uses.
 //!
-//! Every annotated operation pushes [`TraceEvent`]s onto a per-thread
-//! [`BUFFER`]; the extraction driver drains them with [`take_traces`] after
+//! Every annotated operation pushes [`WatchEvent`]s onto a per-thread
+//! [`BUFFER`]; the extraction driver drains them with [`take_events`] after
 //! running the operation. The buffer holds in-memory events only — there is no
 //! serialization or record sink here. [`reset`] clears the buffer between
 //! operations.
 
 use std::cell::RefCell;
 
-use crate::{TraceEvent, Value};
+use crate::{Value, WatchEvent};
 
 thread_local! {
-    static BUFFER: RefCell<Vec<TraceEvent>> = const { RefCell::new(Vec::new()) };
+    static BUFFER: RefCell<Vec<WatchEvent>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Push an `Event { name, value }` onto the thread-local trace buffer, encoding
+/// Push an `Event { name, value }` onto the thread-local event buffer, encoding
 /// `value` as a [`Value::String`].
 ///
 /// The `&str`-taking shim is preserved so macro expansions and call sites that
@@ -24,9 +24,9 @@ pub fn emit_event(name: &str, value: &str) {
     emit_event_v(name, Value::String(value.to_string()));
 }
 
-/// Push a structured `Event { name, value }` onto the thread-local trace buffer.
+/// Push a structured `Event { name, value }` onto the thread-local event buffer.
 pub fn emit_event_v(name: &str, value: Value) {
-    let event = TraceEvent::Event {
+    let event = WatchEvent::Event {
         name: name.to_string(),
         value,
     };
@@ -35,9 +35,9 @@ pub fn emit_event_v(name: &str, value: Value) {
     });
 }
 
-/// Push a `Run { operation }` marker onto the thread-local trace buffer.
+/// Push a `Run { operation }` marker onto the thread-local event buffer.
 pub fn emit_run(operation: &str) {
-    let event = TraceEvent::Run {
+    let event = WatchEvent::Run {
         operation: operation.to_string(),
     };
     BUFFER.with(|b| {
@@ -48,11 +48,11 @@ pub fn emit_run(operation: &str) {
 /// Drain and return all buffered events for the current thread, leaving the
 /// buffer empty.
 #[must_use]
-pub fn take_traces() -> Vec<TraceEvent> {
+pub fn take_events() -> Vec<WatchEvent> {
     BUFFER.with(|b| std::mem::take(&mut *b.borrow_mut()))
 }
 
-/// Clear the thread-local trace buffer. Called between operations so captures
+/// Clear the thread-local event buffer. Called between operations so captures
 /// do not leak into one another.
 pub fn reset() {
     BUFFER.with(|b| b.borrow_mut().clear());
@@ -69,18 +69,18 @@ mod tests {
         emit_event("add.a", "2");
         emit_event_v("$result", Value::Integer(5));
 
-        let traces = take_traces();
+        let events = take_events();
         assert_eq!(
-            traces,
+            events,
             vec![
-                TraceEvent::Run {
+                WatchEvent::Run {
                     operation: "add".into()
                 },
-                TraceEvent::Event {
+                WatchEvent::Event {
                     name: "add.a".into(),
                     value: Value::String("2".into()),
                 },
-                TraceEvent::Event {
+                WatchEvent::Event {
                     name: "$result".into(),
                     value: Value::Integer(5),
                 },
@@ -88,13 +88,13 @@ mod tests {
         );
 
         // Draining leaves the buffer empty.
-        assert!(take_traces().is_empty());
+        assert!(take_events().is_empty());
     }
 
     #[test]
     fn reset_clears_buffer() {
         emit_event("x", "1");
         reset();
-        assert!(take_traces().is_empty());
+        assert!(take_events().is_empty());
     }
 }

@@ -4,7 +4,7 @@
 //! `.emit_result()`. Method resolution picks the highest-priority trait whose
 //! bound the return type satisfies, walking down a fixed ladder:
 //!
-//! - Level 1 — struct returns ([`SpecEventStruct`]): per-field events + a
+//! - Level 1 — struct returns ([`WatchableStruct`]): per-field events + a
 //!   structured `$result`.
 //! - Level 2 — enums / collections / any [`ToValue`]: a structured `$result`.
 //! - Level 3 — any [`Display`](std::fmt::Display) value: a `Display`-string
@@ -24,7 +24,7 @@
 //! via the `Display` path and never reach this ladder, so a primitive's
 //! [`ToValue`] impl does not shadow its intended `Display` formatting.
 
-use crate::{SpecEventStruct, ToValue, Value, emit_event_v};
+use crate::{ToValue, Value, WatchableStruct, emit_event_v};
 
 /// Wrapper around a borrowed return value that drives the emission ladder.
 ///
@@ -47,7 +47,7 @@ pub trait ReturnEmitStruct {
     fn emit_result(&self);
 }
 
-impl<T: SpecEventStruct + ?Sized> ReturnEmitStruct for &&&ReturnEmit<'_, T> {
+impl<T: WatchableStruct + ?Sized> ReturnEmitStruct for &&&ReturnEmit<'_, T> {
     #[inline]
     fn emit_result(&self) {
         self.0.emit_fields(None);
@@ -109,11 +109,11 @@ mod tests {
     )]
 
     use super::*;
-    use crate::{SpecEvent, TraceEvent, reset, take_traces};
+    use crate::{WatchEvent, Watchable, reset, take_events};
 
     struct Wrapped(i64);
 
-    impl SpecEvent for Wrapped {
+    impl Watchable for Wrapped {
         fn emit_fields(&self, prefix: Option<&str>) {
             let name = match prefix {
                 Some(p) => format!("{p}.inner"),
@@ -127,9 +127,9 @@ mod tests {
             Value::Integer(self.0)
         }
     }
-    impl SpecEventStruct for Wrapped {}
+    impl WatchableStruct for Wrapped {}
 
-    /// A type that implements only `ToValue` (not `SpecEventStruct`, not
+    /// A type that implements only `ToValue` (not `WatchableStruct`, not
     /// `Display`) — should land on Level 2.
     struct OnlyValue;
     impl ToValue for OnlyValue {
@@ -146,15 +146,15 @@ mod tests {
         reset();
         let v = Wrapped(7);
         (&&&&ReturnEmit(&v)).emit_result();
-        let traces = take_traces();
+        let events = take_events();
         assert_eq!(
-            traces,
+            events,
             vec![
-                TraceEvent::Event {
+                WatchEvent::Event {
                     name: "inner".into(),
                     value: Value::Integer(7),
                 },
-                TraceEvent::Event {
+                WatchEvent::Event {
                     name: "$result".into(),
                     value: Value::Integer(7),
                 },
@@ -168,8 +168,8 @@ mod tests {
         let v = OnlyValue;
         (&&&&ReturnEmit(&v)).emit_result();
         assert_eq!(
-            take_traces(),
-            vec![TraceEvent::Event {
+            take_events(),
+            vec![WatchEvent::Event {
                 name: "$result".into(),
                 value: Value::Bool(true),
             }]
@@ -182,8 +182,8 @@ mod tests {
         let v = 42_u128;
         (&&&&ReturnEmit(&v)).emit_result();
         assert_eq!(
-            take_traces(),
-            vec![TraceEvent::Event {
+            take_events(),
+            vec![WatchEvent::Event {
                 name: "$result".into(),
                 value: Value::String("42".into()),
             }]
@@ -195,6 +195,6 @@ mod tests {
         reset();
         let v = Opaque;
         (&&&&ReturnEmit(&v)).emit_result();
-        assert!(take_traces().is_empty());
+        assert!(take_events().is_empty());
     }
 }
