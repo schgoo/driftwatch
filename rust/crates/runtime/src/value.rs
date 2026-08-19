@@ -1,9 +1,9 @@
-//! The structured trace [`Value`] and its encoding.
+//! The structured [`Value`] and its encoding.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Structured trace value: any scalar, or a `list`/`map`/`set` of values.
+/// Structured value: any scalar, or a `list`/`map`/`set` of values.
 ///
 /// All integer widths canonicalize to `i64` and all float widths to `f64`, so
 /// identical behavior compares equal across languages and versions; the precise

@@ -1,24 +1,24 @@
-//! The [`TraceEvent`] record type.
+//! The [`WatchEvent`] record type.
 
 use crate::Value;
 
-/// One emitted trace record: a named [`TraceEvent::Event`] carrying a value, or
-/// a [`TraceEvent::Run`] marking the start of an operation.
+/// One emitted event record: a named [`WatchEvent::Event`] carrying a value, or
+/// a [`WatchEvent::Run`] marking the start of an operation.
 ///
 /// # Examples
 ///
 /// ```
-/// use runtime::{TraceEvent, Value};
+/// use runtime::{Value, WatchEvent};
 ///
-/// let event = TraceEvent::Event { name: "count".into(), value: Value::Integer(1) };
+/// let event = WatchEvent::Event { name: "count".into(), value: Value::Integer(1) };
 /// assert_eq!(event.name(), "count");
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[expect(
     clippy::exhaustive_enums,
-    reason = "the wire form of a trace record; adding a variant is a deliberate format change that must be handled everywhere"
+    reason = "the wire form of an event record; adding a variant is a deliberate format change that must be handled everywhere"
 )]
-pub enum TraceEvent {
+pub enum WatchEvent {
     /// A named event carrying a structured value.
     Event {
         /// The event name (for example an operation input or `$result`).
@@ -33,13 +33,13 @@ pub enum TraceEvent {
     },
 }
 
-impl TraceEvent {
+impl WatchEvent {
     /// Returns the event name, or the operation name for a `Run`.
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            TraceEvent::Event { name, .. } => name,
-            TraceEvent::Run { operation } => operation,
+            WatchEvent::Event { name, .. } => name,
+            WatchEvent::Run { operation } => operation,
         }
     }
 }
@@ -50,13 +50,13 @@ mod tests {
 
     #[test]
     fn names() {
-        let event = TraceEvent::Event {
+        let event = WatchEvent::Event {
             name: "count".into(),
             value: Value::Integer(1),
         };
         assert_eq!(event.name(), "count");
 
-        let run = TraceEvent::Run {
+        let run = WatchEvent::Run {
             operation: "add".into(),
         };
         assert_eq!(run.name(), "add");

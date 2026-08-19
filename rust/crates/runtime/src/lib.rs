@@ -1,23 +1,35 @@
 //! The Driftwatch runtime: the low-level substrate that annotated code emits
-//! behavioral traces into.
+//! behavioral events into.
 //!
-//! Driftwatch captures a program's observable behavior as a stream of trace
+//! Driftwatch captures a program's observable behavior as a stream of watch
 //! events and diffs two captures to detect version-to-version drift. This crate
 //! is the bottom of that stack — the structured value type, the event record,
 //! and the conversion trait the annotation macros expand into. The extraction
 //! driver runs annotated code and collects what this crate emits; the diff
 //! engine compares two such collections. Nothing here knows about diffing or
-//! bindings; it only defines *what a trace is made of*.
+//! bindings; it only defines *what an event is made of*.
 //!
 //! # Key types
 //!
-//! - [`Value`] — the universal structured trace value: any scalar, or a
+//! - [`Value`] — the universal structured value: any scalar, or a
 //!   `list`/`map`/`set` of values. All integer widths canonicalize to `i64` and
 //!   all float widths to `f64`.
-//! - [`TraceEvent`] — one emitted record: a named [`TraceEvent::Event`] carrying
-//!   a value, or a [`TraceEvent::Run`] marking the start of an operation.
+//! - [`WatchEvent`] — one emitted record: a named [`WatchEvent::Event`] carrying
+//!   a value, or a [`WatchEvent::Run`] marking the start of an operation.
 //! - [`ToValue`] — converts an annotated Rust value into a [`Value`]; this is
 //!   the conversion the emit macros invoke.
+//!
+//! # Emission and discovery
+//!
+//! On top of the event types this crate provides the machinery the annotation
+//! macros expand into: a thread-local event buffer ([`emit_event`],
+//! [`emit_event_v`], [`emit_run`], [`take_events`], [`reset`]), the
+//! [`Watchable`] field-emission trait, the [`ReturnEmit`]
+//! autoref-specialization ladder for `$result`
+//! emission, and the link-time operation/type registry ([`OpMeta`] /
+//! [`TypeMeta`] via [`discovery_json`]) the extraction driver reads to derive a
+//! contract. The buffer holds in-memory events only — persisting a capture is
+//! the artifact layer's job (see below).
 //!
 //! # Comparison
 //!
@@ -30,11 +42,11 @@
 //! identical observation and any inequality is a genuine difference — the
 //! property a drift check depends on.
 //!
-//! Equality and ordering are not decorative: [`TraceEvent`] compares by value,
+//! Equality and ordering are not decorative: [`WatchEvent`] compares by value,
 //! and the `Set` variant is stored in a `BTreeSet`, which requires `Value` to be
 //! totally ordered.
 //!
-//! This crate defines only the in-memory trace types and their comparison; it
+//! This crate defines only the in-memory event types and their comparison; it
 //! does not serialize them. Persisting a capture to a file is the artifact
 //! layer''s job, and its format must round-trip these values faithfully —
 //! notably preserving `Set` vs `List` and the float edge cases — so that a
@@ -45,23 +57,39 @@
 //! # Examples
 //!
 //! ```
-//! use runtime::{ToValue, TraceEvent, Value};
+//! use runtime::{ToValue, Value, WatchEvent};
 //!
-//! // Convert a Rust value into the canonical trace value...
+//! // Convert a Rust value into the canonical value...
 //! assert_eq!(
 //!     vec![1_i32, 2].to_value(),
 //!     Value::List(vec![Value::Integer(1), Value::Integer(2)])
 //! );
 //!
 //! // ...and wrap it in an emitted event.
-//! let event = TraceEvent::Event { name: "$result".into(), value: 5_i32.to_value() };
+//! let event = WatchEvent::Event { name: "$result".into(), value: 5_i32.to_value() };
 //! assert_eq!(event.name(), "$result");
 //! ```
 
+mod buffer;
+mod registry;
+mod return_emit;
 mod to_value;
-mod trace_event;
 mod value;
+mod watch_event;
+mod watchable;
 
+pub use buffer::{emit_event, emit_event_v, emit_run, reset, take_events};
+pub use registry::{
+    DRIFTWATCH_OPS, DRIFTWATCH_TYPES, FieldMeta, OpMeta, TypeMeta, VariantMeta, discovery_json,
+};
+pub use return_emit::{
+    ReturnEmit, ReturnEmitDisplay, ReturnEmitNone, ReturnEmitStruct, ReturnEmitToValue,
+};
 pub use to_value::ToValue;
-pub use trace_event::TraceEvent;
 pub use value::Value;
+pub use watch_event::WatchEvent;
+pub use watchable::{Watchable, WatchableStruct};
+
+/// Re-exported for macro-generated code, which references `linkme` paths when
+/// registering operations and types into the link-time registry.
+pub use linkme;
