@@ -79,17 +79,24 @@ mod watch_event;
 mod watchable;
 
 pub use buffer::{emit_event, emit_event_v, emit_run, reset, take_events};
+#[doc(hidden)]
 pub use registry::{
     DRIFTWATCH_OPS, DRIFTWATCH_TYPES, FieldMeta, OpMeta, TypeMeta, VariantMeta, discovery_json,
 };
+#[doc(hidden)]
 pub use return_emit::{
     ReturnEmit, ReturnEmitDisplay, ReturnEmitNone, ReturnEmitStruct, ReturnEmitToValue,
 };
 pub use to_value::ToValue;
 pub use value::Value;
 pub use watch_event::WatchEvent;
+#[doc(hidden)]
 pub use watchable::{Watchable, WatchableStruct};
 
-/// Re-exported for macro-generated code, which references `linkme` paths when
-/// registering operations and types into the link-time registry.
-pub use linkme;
+/// Internal re-exports for macro-generated code. Not part of the public API;
+/// no stability guarantee. Referenced by the annotation macros (see the
+/// annotations crate) when registering into the link-time registry.
+#[doc(hidden)]
+pub mod __macro_support {
+    pub use linkme;
+}

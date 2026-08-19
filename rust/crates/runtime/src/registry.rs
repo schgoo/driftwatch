@@ -5,6 +5,12 @@
 //! [`DRIFTWATCH_OPS`] / [`DRIFTWATCH_TYPES`] distributed slices at link time;
 //! [`discovery_json`] serializes the collected metadata into a JSON string the
 //! extraction driver reads to derive a contract from annotated code.
+//!
+//! [`discovery_json`] produces an internal, dependency-free discovery handoff
+//! consumed by the separate contract-extraction driver — it is NOT the persisted
+//! capture artifact format (that remains deferred to issue #11), and whether the
+//! driver consumes serialized JSON or reads the `&'static` metadata in-process is
+//! a consumer-side decision for the extraction driver (issue #10).
 
 use std::fmt::Write as _;
 
@@ -17,11 +23,11 @@ use std::fmt::Write as _;
 pub struct OpMeta {
     /// The operation name (its spec identity).
     pub name: &'static str,
-    /// The Rust module path the operation is defined in.
+    /// The module/namespace path the operation is defined in.
     pub module_path: &'static str,
     /// The name of the annotated function.
     pub fn_name: &'static str,
-    /// Whether this entry is a `#[spec_setup]` rather than an operation.
+    /// Whether this entry is a setup (`#[watch_setup]`) rather than an operation.
     pub is_setup: bool,
     /// Whether the annotated function is `async`.
     pub is_async: bool,
@@ -32,7 +38,7 @@ pub struct OpMeta {
     /// For setups: the operation parameter this setup fills (empty if unset).
     /// Used to disambiguate when several params share the setup's output type.
     pub fills: &'static str,
-    /// The component (declared via `spec_component!` or a per-item `spec = "…"`
+    /// The component (declared via `watch_component!` or a per-item `watch = "…"`
     /// override) that owns this operation. Extraction groups by component and
     /// derives cross-component `depends_on` from it.
     pub component: &'static str,
@@ -69,7 +75,7 @@ pub struct VariantMeta {
 pub struct TypeMeta {
     /// The type name.
     pub name: &'static str,
-    /// The Rust module path the type is defined in.
+    /// The module/namespace path the type is defined in.
     pub module_path: &'static str,
     /// Either `"struct"` or `"enum"`.
     pub kind: &'static str,

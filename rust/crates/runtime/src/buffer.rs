@@ -5,6 +5,20 @@
 //! running the operation. The buffer holds in-memory events only — there is no
 //! serialization or record sink here. [`reset`] clears the buffer between
 //! operations.
+//!
+//! # Threading contract
+//!
+//! The buffer is thread-local, so a capture is per-thread: an operation and all
+//! the events it emits must run on the same thread. Under `cargo test` each test
+//! runs on its own thread, so tests' emissions are naturally isolated per test
+//! and can be keyed deterministically by the test's name
+//! (`std::thread::current().name()` returns the test path under libtest).
+//!
+//! Escape hatch: if code under test spawns its own threads or async tasks that
+//! emit without propagating the buffer, those events land in a different
+//! thread-local buffer and won't appear in that test's [`take_events`].
+//! Capturing cross-thread/async emission deterministically is future work
+//! tracked in the capture-model design (issue #9).
 
 use std::cell::RefCell;
 
