@@ -145,3 +145,16 @@ pub fn extract_param_renames(f: &mut ItemFn) -> Vec<Param> {
 pub fn param_name(p: &Param) -> String {
     p.rename.clone().unwrap_or_else(|| p.ident.to_string())
 }
+
+/// Turn an arbitrary string into a valid uppercase identifier suffix.
+pub fn sanitize_ident(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
