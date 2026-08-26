@@ -15,6 +15,7 @@ use annotations::{ToValue, Value, Watchable, reset, take_events};
 
 mod common;
 use common::ev;
+use serde_json::json;
 
 #[derive(Watchable)]
 struct User {
@@ -113,21 +114,45 @@ fn enum_emit_fields_named_variant_emits_base_and_fields() {
 
 #[test]
 fn discovery_registers_struct_and_enum_types() {
+    // Parse (not substring-match) to prove the envelope is well-formed JSON and
+    // to navigate it structurally. The type *order* is link-order and not
+    // guaranteed, so find each type by name; each type's fields/variants are in
+    // source order (deterministic) and asserted exactly.
     let json = annotations::__rt::discovery_json();
-    // Struct: only tagged fields, honoring the rename.
-    assert!(json.contains("\"name\":\"User\""));
-    assert!(json.contains("\"kind\":\"struct\""));
-    assert!(json.contains("[\"id\",\"i64\"]"));
-    assert!(json.contains("[\"display\",\"String\"]"));
-    assert!(!json.contains("secret"));
-    // Enum: one variant entry each.
-    assert!(json.contains("\"name\":\"Status\""));
-    assert!(json.contains("\"kind\":\"enum\""));
-    assert!(json.contains("\"name\":\"Named\""));
-    assert!(json.contains("[\"label\",\"String\"]"));
-    assert!(json.contains("\"name\":\"Active\""));
-    assert!(json.contains("\"name\":\"Wrapped\""));
-    // Component is the annotated crate's package name (`CARGO_PKG_NAME`), which
-    // for this integration-test crate is `annotations`.
-    assert!(json.contains("\"component\":\"annotations\""));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&json).expect("discovery_json must be valid JSON");
+    let types = parsed["types"]
+        .as_array()
+        .expect("`types` must be an array");
+    let find = |n: &str| {
+        types
+            .iter()
+            .find(|t| t["name"] == n)
+            .unwrap_or_else(|| panic!("discovery is missing type `{n}`"))
+    };
+
+    // Struct: only the tagged fields, honoring the rename; `secret` is excluded.
+    let user = find("User");
+    assert_eq!(user["kind"], "struct");
+    assert_eq!(user["component"], "annotations");
+    assert_eq!(
+        user["fields"],
+        json!([["id", "i64"], ["display", "String"]])
+    );
+    assert_eq!(user["variants"], json!([]));
+
+    // Enum: no top-level fields, one entry per variant in declaration order,
+    // named-variant fields carried through.
+    let status = find("Status");
+    assert_eq!(status["kind"], "enum");
+    assert_eq!(status["component"], "annotations");
+    assert_eq!(status["fields"], json!([]));
+    assert_eq!(
+        status["variants"],
+        json!([
+            { "name": "Active", "fields": [] },
+            { "name": "Named", "fields": [["label", "String"]] },
+            { "name": "Wrapped", "fields": [] },
+        ])
+    );
 }
