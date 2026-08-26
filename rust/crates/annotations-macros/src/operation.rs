@@ -1,7 +1,7 @@
 //! The `#[watch_operation]` attribute expansion.
 //!
-//! The operation name is the function name; the component comes from
-//! `watch_component!`. Expansion emits a `Run` marker, one event per value
+//! The operation name is the function name; the component is the annotated
+//! crate's package name (`CARGO_PKG_NAME`). Expansion emits a `Run` marker, one event per value
 //! parameter, instruments the body (field-mutation echo), emits `$result` after the body on every return path, and registers
 //! an [`OpMeta`](crate::shared) entry into the link-time registry. Unlike the
 //! `SpecGate` `#[spec_operation]` it lifts from, it takes no arguments (the

@@ -80,3 +80,5 @@ proc-macro2 = "1"
 # Internal crates wired together by the annotation facade.
 runtime = { path = "crates/runtime" }
 annotations-macros = { path = "crates/annotations-macros" }
+# JSON parsing in tests (validating the discovery envelope is well-formed).
+serde_json = "1"

@@ -7,13 +7,15 @@ _default:
 build:
     cd rust && cargo build --workspace --all-targets
 
-# Run all tests
+# Run all tests (both feature configs: default/off-identity and trace-on)
 test:
     cd rust && cargo test --workspace
+    cd rust && cargo test --workspace --all-features
 
-# Run clippy (warnings as errors)
+# Run clippy (warnings as errors), both feature configs
 clippy:
     cd rust && cargo clippy --workspace --all-targets -- -D warnings
+    cd rust && cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Check formatting
 format-check:

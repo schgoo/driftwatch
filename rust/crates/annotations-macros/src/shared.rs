@@ -4,18 +4,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::parse::{Parse, ParseStream};
 use syn::{FnArg, Ident, ItemFn, LitStr, Pat, ReturnType, Type};
-
-/// A single string-literal attribute argument, e.g. `#[watch_input("name")]`.
-pub struct NameArg(pub String);
-
-impl Parse for NameArg {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let lit: LitStr = input.parse()?;
-        Ok(NameArg(lit.value()))
-    }
-}
 
 /// The funnel path the generated code references. Everything the macros expand
 /// into is reached through the facade's hidden `__rt` module, so annotated
@@ -24,12 +13,11 @@ pub fn rt() -> TokenStream2 {
     quote! { ::annotations::__rt }
 }
 
-/// The token for an item's `component` field: the crate-root
-/// `__DRIFTWATCH_COMPONENT` constant declared by `watch_component!`. Referencing
-/// it makes omitting `watch_component!` a COMPILE-TIME error ("cannot find value
-/// `__DRIFTWATCH_COMPONENT` in the crate root").
+/// The token for an item's `component` field: the annotated crate's package
+/// name, taken from `CARGO_PKG_NAME` at the annotated crate's compile time.
+/// Extraction groups operations and types by this component.
 pub fn component_tokens() -> TokenStream2 {
-    quote! { crate::__DRIFTWATCH_COMPONENT }
+    quote! { ::core::env!("CARGO_PKG_NAME") }
 }
 
 /// How an operation's return type is emitted as `$result`.

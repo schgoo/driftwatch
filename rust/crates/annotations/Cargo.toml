@@ -12,10 +12,16 @@ description = "Driftwatch annotation surface: the user-facing facade over the ru
 runtime.workspace = true
 annotations-macros.workspace = true
 
+[dev-dependencies]
+serde_json.workspace = true
+
 [features]
-# On by default: forward tracing to the macro layer so annotated code emits.
-# Build with `--no-default-features` for a zero-cost (identity-expansion) build.
-default = ["trace"]
+# Off by default: a plain build is zero-cost, expanding every macro to identity
+# so annotated code compiles unchanged and emits nothing (no registry statics,
+# no `__rt` references). Enable `trace` — as the extraction driver does while
+# taking a snapshot — to forward to the macro layer and turn on emission plus
+# the link-time discovery registry.
+default = []
 trace = ["annotations-macros/trace"]
 
 [lints]

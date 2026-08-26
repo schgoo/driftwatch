@@ -31,10 +31,18 @@ jobs:
       - name: Tests
         working-directory: rust
         run: cargo test --workspace
+      - name: Tests (all features)
+        if: success() || failure()
+        working-directory: rust
+        run: cargo test --workspace --all-features
       - name: Clippy
         if: success() || failure()
         working-directory: rust
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Clippy (all features)
+        if: success() || failure()
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Format
         if: success() || failure()
         working-directory: rust

@@ -1,11 +1,12 @@
 //! Production gating: the same annotated code emits under `trace` and is inert
-//! (identity expansion, no events) with `--no-default-features`.
+//! (identity expansion, no events) with the default (no-`trace`) build.
 //!
-//! Run the off path with `cargo test -p annotations --no-default-features`.
+//! Run the off path with `cargo test -p annotations` (default features) and the
+//! on path with `cargo test -p annotations --all-features`. Unlike the other
+//! emission tests this one is NOT `#[ignore]`d off-trace: it asserts the correct
+//! behavior in BOTH configs via `cfg`.
 
-use annotations::{reset, take_events, watch_component, watch_operation, watch_point};
-
-watch_component!("gate");
+use annotations::{reset, take_events, watch_operation, watch_point};
 
 #[watch_operation]
 fn add(a: i64, b: i64) -> i64 {
