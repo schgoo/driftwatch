@@ -73,3 +73,12 @@ cargo_common_metadata = "allow"
 # Link-time distributed slices: the runtime's operation/type registry is
 # populated across compilation units and iterated by discovery.
 linkme = "0.3"
+# Procedural-macro toolkit for the annotation macros.
+syn = { version = "2", features = ["full", "visit-mut"] }
+quote = "1"
+proc-macro2 = "1"
+# Internal crates wired together by the annotation facade.
+runtime = { path = "crates/runtime" }
+annotations-macros = { path = "crates/annotations-macros" }
+# JSON parsing in tests (validating the discovery envelope is well-formed).
+serde_json = "1"

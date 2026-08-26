@@ -8,5 +8,18 @@ repository.workspace = true
 authors.workspace = true
 description = "Driftwatch annotation surface: the user-facing facade over the runtime and macros."
 
+[dependencies]
+runtime.workspace = true
+annotations-macros.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[features]
+# Off by default so a plain build is zero-cost (macros expand to identity, no
+# emission). The extraction driver enables `trace` to turn on emission.
+default = []
+trace = ["annotations-macros/trace"]
+
 [lints]
 workspace = true
