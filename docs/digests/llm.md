@@ -30,6 +30,9 @@ behavior — no hand-authored assertion to weaken.
   dynamic/coverage-limited and must be canonicalized before diffing.
 - One artifact per code version: `{contract, traces[keyed]}`. The trace key
   (op + canonicalized inputs) aligns runs across versions.
+- Synthetic return events are named exactly `$result`; the `$` reserves the
+  compiler-synthesized namespace. Renaming it requires an explicit human-owned
+  trace-contract decision.
 
 ## Decision boundaries (need a human owner)
 

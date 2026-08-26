@@ -151,6 +151,13 @@ runs are slow.
 3. Ship contract-diff before trace-diff (recommended — metadata drift is the
    cheap, always-available, coverage-independent first product).
 
+## Resolved decisions
+
+- **Synthetic return event name (#31): keep `$result`.** The `$` reserves a
+  compiler-synthesized namespace and prevents confusion with user-named
+  parameters or fields. This decision preserves the existing event vocabulary;
+  it does not change trace structure, ordering, encoding, or canonicalization.
+
 ## Related SpecGate issues (context)
 
 - #36 — trace-engine trust anchor + trace contract (the extraction TCB; source
