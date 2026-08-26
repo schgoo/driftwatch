@@ -8,5 +8,15 @@ repository.workspace = true
 authors.workspace = true
 description = "Driftwatch annotation surface: the user-facing facade over the runtime and macros."
 
+[dependencies]
+runtime.workspace = true
+annotations-macros.workspace = true
+
+[features]
+# On by default: forward tracing to the macro layer so annotated code emits.
+# Build with `--no-default-features` for a zero-cost (identity-expansion) build.
+default = ["trace"]
+trace = ["annotations-macros/trace"]
+
 [lints]
 workspace = true

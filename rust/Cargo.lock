@@ -5,10 +5,19 @@ version = 4
 [[package]]
 name = "annotations"
 version = "0.1.0"
+dependencies = [
+ "annotations-macros",
+ "runtime",
+]
 
 [[package]]
 name = "annotations-macros"
 version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "cli"
@@ -43,7 +52,7 @@ checksum = "77060ebe535362c3da75682cd17b0431017b6e7c5661e714fc69a7ad017d1301"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -69,6 +78,17 @@ name = "runtime"
 version = "0.1.0"
 dependencies = [
  "linkme",
+]
+
+[[package]]
+name = "syn"
+version = "2.0.119"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
 ]
 
 [[package]]
