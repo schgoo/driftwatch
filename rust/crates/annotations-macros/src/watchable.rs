@@ -13,7 +13,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Ident, LitStr, Meta, parse_macro_input};
+use syn::{Attribute, Data, DeriveInput, Fields, Ident, LitStr, Meta, parse_macro_input};
 
 use crate::shared::{component_tokens, rt, sanitize_ident};
 
@@ -41,23 +41,10 @@ pub fn expand(input: TokenStream) -> TokenStream {
                     continue;
                 }
                 marked = true;
-                // Only a list-form `#[watchable(...)]` carries arguments; a
-                // bare `#[watchable]` has none. Reject malformed arguments and
-                // unknown keys with a compile error rather than ignoring them.
-                if matches!(a.meta, Meta::List(_))
-                    && let Err(e) = a.parse_nested_meta(|meta| {
-                        if meta.path.is_ident("name") {
-                            let lit: LitStr = meta.value()?.parse()?;
-                            override_name = Some(lit.value());
-                            Ok(())
-                        } else {
-                            Err(meta.error(
-                                "unknown `#[watchable]` argument; expected `name = \"...\"`",
-                            ))
-                        }
-                    })
-                {
-                    return e.to_compile_error().into();
+                match watchable_field_name(a) {
+                    Ok(Some(n)) => override_name = Some(n),
+                    Ok(None) => {}
+                    Err(e) => return e.to_compile_error().into(),
                 }
             }
             if !marked {
@@ -112,6 +99,29 @@ pub fn expand(input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Parse a `#[watchable]` field attribute.
+///
+/// Returns `Ok(Some(name))` for a `#[watchable(name = "…")]` rename, `Ok(None)`
+/// for a bare `#[watchable]` or empty `#[watchable()]`, and `Err` for a
+/// malformed argument or unknown key — so the derive rejects those at compile
+/// time instead of silently falling back to the field identifier.
+fn watchable_field_name(attr: &Attribute) -> syn::Result<Option<String>> {
+    // Only a list-form `#[watchable(...)]` carries arguments.
+    if !matches!(attr.meta, Meta::List(_)) {
+        return Ok(None);
+    }
+    let mut name = None;
+    attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("name") {
+            let lit: LitStr = meta.value()?.parse()?;
+            name = Some(lit.value());
+            Ok(())
+        } else {
+            Err(meta.error("unknown `#[watchable]` argument; expected `name = \"...\"`"))
+        }
+    })?;
+    Ok(name)
+}
 /// The emit arm, `to_value` arm, and `VariantMeta` for one enum variant.
 struct VariantParts {
     arm: TokenStream2,
@@ -287,5 +297,59 @@ fn register_type_meta(
                 component: #component,
             };
         };
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::watchable_field_name;
+    use quote::quote;
+    use syn::{Attribute, parse::Parser};
+
+    fn attr(tokens: proc_macro2::TokenStream) -> Attribute {
+        Attribute::parse_outer
+            .parse2(tokens)
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap()
+    }
+
+    #[test]
+    fn bare_watchable_has_no_override() {
+        assert_eq!(
+            watchable_field_name(&attr(quote!(#[watchable]))).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn empty_list_has_no_override() {
+        assert_eq!(
+            watchable_field_name(&attr(quote!(#[watchable()]))).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn name_override_is_parsed() {
+        assert_eq!(
+            watchable_field_name(&attr(quote!(#[watchable(name = "display")]))).unwrap(),
+            Some("display".to_string())
+        );
+    }
+
+    #[test]
+    fn unknown_key_is_rejected() {
+        watchable_field_name(&attr(quote!(#[watchable(bogus)]))).unwrap_err();
+    }
+
+    #[test]
+    fn non_string_name_is_rejected() {
+        watchable_field_name(&attr(quote!(#[watchable(name = 42)]))).unwrap_err();
+    }
+
+    #[test]
+    fn missing_name_value_is_rejected() {
+        watchable_field_name(&attr(quote!(#[watchable(name)]))).unwrap_err();
     }
 }
