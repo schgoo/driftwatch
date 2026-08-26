@@ -13,7 +13,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Ident, LitStr, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, Ident, LitStr, Meta, parse_macro_input};
 
 use crate::shared::{component_tokens, rt, sanitize_ident};
 
@@ -41,13 +41,24 @@ pub fn expand(input: TokenStream) -> TokenStream {
                     continue;
                 }
                 marked = true;
-                let _ = a.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("name") {
-                        let lit: LitStr = meta.value()?.parse()?;
-                        override_name = Some(lit.value());
-                    }
-                    Ok(())
-                });
+                // Only a list-form `#[watchable(...)]` carries arguments; a
+                // bare `#[watchable]` has none. Reject malformed arguments and
+                // unknown keys with a compile error rather than ignoring them.
+                if matches!(a.meta, Meta::List(_))
+                    && let Err(e) = a.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("name") {
+                            let lit: LitStr = meta.value()?.parse()?;
+                            override_name = Some(lit.value());
+                            Ok(())
+                        } else {
+                            Err(meta.error(
+                                "unknown `#[watchable]` argument; expected `name = \"...\"`",
+                            ))
+                        }
+                    })
+                {
+                    return e.to_compile_error().into();
+                }
             }
             if !marked {
                 continue;
