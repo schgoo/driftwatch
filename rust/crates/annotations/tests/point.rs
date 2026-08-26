@@ -13,7 +13,7 @@ use common::ev;
 fn checkpoint_emits_one_event() {
     reset();
     let x = 42_i64;
-    assert_eq!(x, 42_i64);
+    assert_eq!(x, 42);
     watch_point!("cp", &x);
-    assert_eq!(take_events(), vec![ev("cp", 42_i64)]);
+    assert_eq!(take_events(), vec![ev("cp", 42)]);
 }

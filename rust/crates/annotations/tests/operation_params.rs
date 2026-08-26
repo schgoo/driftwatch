@@ -73,9 +73,9 @@ fn value_params_each_emit_one_event() {
         take_events(),
         vec![
             run("scaled"),
-            ev("scaled.n", 3_i64),
-            ev("scaled.factor", 4_i64),
-            ev("$result", 12_i64),
+            ev("scaled.n", 3),
+            ev("scaled.factor", 4),
+            ev("$result", 12),
         ]
     );
 }
@@ -89,8 +89,8 @@ fn watch_input_overrides_param_event_name() {
         take_events(),
         vec![
             run("greet"),
-            ev("greet.subject", "ada".to_string()),
-            ev("$result", "hi ada".to_string()),
+            ev("greet.subject", "ada"),
+            ev("$result", "hi ada"),
         ]
     );
 }
@@ -106,7 +106,7 @@ fn mut_ref_param_is_excluded_from_input_emission() {
     // unit return emits no `$result`.
     assert_eq!(
         take_events(),
-        vec![run("accumulate"), ev("accumulate.delta", 5_i64)]
+        vec![run("accumulate"), ev("accumulate.delta", 5)]
     );
 }
 
@@ -120,11 +120,7 @@ fn shared_ref_param_is_emitted_by_value() {
     // value (not skipped like `&mut T`).
     assert_eq!(
         take_events(),
-        vec![
-            run("observe"),
-            ev("observe.value", 7_i64),
-            ev("$result", 7_i64),
-        ]
+        vec![run("observe"), ev("observe.value", 7), ev("$result", 7),]
     );
 }
 
@@ -137,10 +133,6 @@ fn receiver_emits_no_event() {
     // No event for `&self` — only the value param and the result.
     assert_eq!(
         take_events(),
-        vec![
-            run("resize"),
-            ev("resize.width", 64_i64),
-            ev("$result", 64_i64),
-        ]
+        vec![run("resize"), ev("resize.width", 64), ev("$result", 64),]
     );
 }

@@ -48,12 +48,7 @@ fn self_field_mutations_are_echoed_in_order() {
     // compound `+=` on `count`, then the plain `=` on `last`.
     assert_eq!(
         take_events(),
-        vec![
-            run("bump"),
-            ev("bump.by", 4_i64),
-            ev("count", 5_i64),
-            ev("last", 4_i64),
-        ]
+        vec![run("bump"), ev("bump.by", 4), ev("count", 5), ev("last", 4),]
     );
 }
 
@@ -70,8 +65,8 @@ fn mut_ref_param_field_mutation_is_echoed_as_param_dot_field() {
         take_events(),
         vec![
             run("configure"),
-            ev("configure.level", 9_i64),
-            ev("cfg.level", 9_i64),
+            ev("configure.level", 9),
+            ev("cfg.level", 9),
         ]
     );
 }

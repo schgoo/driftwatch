@@ -16,11 +16,8 @@ annotations-macros.workspace = true
 serde_json.workspace = true
 
 [features]
-# Off by default: a plain build is zero-cost, expanding every macro to identity
-# so annotated code compiles unchanged and emits nothing (no registry statics,
-# no `__rt` references). Enable `trace` — as the extraction driver does while
-# taking a snapshot — to forward to the macro layer and turn on emission plus
-# the link-time discovery registry.
+# Off by default so a plain build is zero-cost (macros expand to identity, no
+# emission). The extraction driver enables `trace` to turn on emission.
 default = []
 trace = ["annotations-macros/trace"]
 

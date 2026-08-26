@@ -1,10 +1,10 @@
 //! Shared helpers for the annotation integration tests.
 //!
 //! `ev`/`run` build the two [`WatchEvent`] shapes the emission assertions
-//! compare against. `ev` takes `impl ToValue`, so tests can pass raw scalars
-//! (`ev("add.a", 2_i64)`) or pre-built [`Value`]s (`Value: ToValue` is the
-//! identity) interchangeably; for string params call `.to_string()` first,
-//! since there is no `impl ToValue for str`.
+//! compare against. `ev` takes `impl ToValue`, so tests pass raw values and let
+//! the conversion do the wrapping: integers (`ev("add.a", 2)`), strings
+//! (`ev("greet.subject", "ada")`), and collections (`ev("xs", vec![1, 2])`) all
+//! work directly, as do pre-built [`Value`]s (`Value: ToValue` is the identity).
 //!
 //! Not every test file uses every helper, so this module allows dead code.
 #![allow(

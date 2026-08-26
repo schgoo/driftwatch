@@ -77,7 +77,7 @@ fn unit_return_emits_no_result() {
     log_only("hello".to_string());
     assert_eq!(
         take_events(),
-        vec![run("log_only"), ev("log_only.msg", "hello".to_string())]
+        vec![run("log_only"), ev("log_only.msg", "hello")]
     );
 }
 
@@ -88,12 +88,7 @@ fn scalar_return_is_a_direct_result() {
     assert_eq!(add(2, 3), 5);
     assert_eq!(
         take_events(),
-        vec![
-            run("add"),
-            ev("add.a", 2_i64),
-            ev("add.b", 3_i64),
-            ev("$result", 5_i64),
-        ]
+        vec![run("add"), ev("add.a", 2), ev("add.b", 3), ev("$result", 5),]
     );
 }
 
@@ -108,8 +103,8 @@ fn result_ok_is_tagged_ok_map() {
         take_events(),
         vec![
             run("checked_div"),
-            ev("checked_div.a", 10_i64),
-            ev("checked_div.b", 2_i64),
+            ev("checked_div.a", 10),
+            ev("checked_div.b", 2),
             ev("$result", Value::Map(m)),
         ]
     );
@@ -126,8 +121,8 @@ fn result_err_is_tagged_err_map() {
         take_events(),
         vec![
             run("checked_div"),
-            ev("checked_div.a", 1_i64),
-            ev("checked_div.b", 0_i64),
+            ev("checked_div.a", 1),
+            ev("checked_div.b", 0),
             ev("$result", Value::Map(m)),
         ]
     );
@@ -144,14 +139,7 @@ fn option_some_is_tagged_some_map() {
         take_events(),
         vec![
             run("first_even"),
-            ev(
-                "first_even.xs",
-                Value::List(vec![
-                    Value::Integer(1),
-                    Value::Integer(4),
-                    Value::Integer(6)
-                ])
-            ),
+            ev("first_even.xs", vec![1, 4, 6]),
             ev("$result", Value::Map(m)),
         ]
     );
@@ -171,10 +159,7 @@ fn option_none_is_tagged_none_map() {
         take_events(),
         vec![
             run("first_even"),
-            ev(
-                "first_even.xs",
-                Value::List(vec![Value::Integer(1), Value::Integer(3)])
-            ),
+            ev("first_even.xs", vec![1, 3]),
             ev("$result", Value::Map(m)),
         ]
     );
@@ -187,10 +172,6 @@ fn async_result_is_emitted_after_the_body_completes() {
     assert_eq!(block_on(doubled(21)), 42);
     assert_eq!(
         take_events(),
-        vec![
-            run("doubled"),
-            ev("doubled.id", 21_i64),
-            ev("$result", 42_i64),
-        ]
+        vec![run("doubled"), ev("doubled.id", 21), ev("$result", 42),]
     );
 }
