@@ -16,8 +16,9 @@
 //! statics, and ZERO `__rt` references:
 //!
 //! - `#[watch_operation]` → the annotated item unchanged (bar removing the inert
-//!   `#[watch_input]` helper attributes, which cannot stand alone on a param);
-//! - `#[watch_input]` → the annotated statement unchanged;
+//!   `#[watch_input]` / `#[watch_dep]` helper attributes, which cannot stand
+//!   alone on a param or a statement);
+//! - `#[watch_input]` / `#[watch_dep]` → the annotated statement unchanged;
 //! - `watch_point!(…)` → `()`.
 //!
 //! # Layout exception
@@ -32,6 +33,8 @@
 // modules keeps a `--no-default-features` build free of dead code.
 #[cfg(feature = "trace")]
 mod body;
+#[cfg(feature = "trace")]
+mod dep;
 #[cfg(feature = "trace")]
 mod operation;
 #[cfg(feature = "trace")]
@@ -57,20 +60,24 @@ pub fn watch_operation(attr: TokenStream, item: TokenStream) -> TokenStream {
     #[cfg(not(feature = "trace"))]
     {
         let _ = attr;
-        strip_watch_input(item)
+        strip_helper_attrs(item)
     }
 }
 
-/// Strip the inert `#[watch_input(...)]` parameter attributes from an identity
-/// (trace-off) expansion.
+/// Strip the inert `#[watch_input]` / `#[watch_dep]` helper attributes from an
+/// identity (trace-off) expansion.
 ///
-/// `#[watch_input]` is only ever meaningful as a helper consumed by an enclosing
-/// `#[watch_operation]`; a bare attribute-macro cannot legally sit on a function
-/// parameter. With `trace` off `#[watch_operation]` performs no instrumentation,
-/// but it must still remove these helper attributes so the untouched item
-/// compiles. Falls back to the input unchanged if it does not parse as a `fn`.
+/// `#[watch_input]` (on a value parameter) and `#[watch_dep]` (on a `let` in the
+/// body) are only ever meaningful as helpers consumed by an enclosing
+/// `#[watch_operation]`; a bare attribute-macro cannot legally sit on a
+/// parameter or a statement. With `trace` off `#[watch_operation]` performs no
+/// instrumentation, but it must still remove these helper attributes so the
+/// untouched item compiles. Falls back to the input unchanged if it does not
+/// parse as a `fn`.
 #[cfg(not(feature = "trace"))]
-fn strip_watch_input(item: TokenStream) -> TokenStream {
+fn strip_helper_attrs(item: TokenStream) -> TokenStream {
+    use syn::visit_mut::VisitMut;
+
     let Ok(mut func) = syn::parse::<syn::ItemFn>(item.clone()) else {
         return item;
     };
@@ -79,7 +86,25 @@ fn strip_watch_input(item: TokenStream) -> TokenStream {
             pt.attrs.retain(|a| !a.path().is_ident("watch_input"));
         }
     }
+    StripWatchDep.visit_block_mut(&mut func.block);
     quote::quote!(#func).into()
+}
+
+/// Removes `#[watch_dep]` from every `let` binding in the body (including nested
+/// blocks and closures) for the trace-off identity expansion.
+#[cfg(not(feature = "trace"))]
+struct StripWatchDep;
+
+#[cfg(not(feature = "trace"))]
+impl syn::visit_mut::VisitMut for StripWatchDep {
+    #[allow(
+        clippy::renamed_function_params,
+        reason = "descriptive name for the visited local"
+    )]
+    fn visit_local_mut(&mut self, local: &mut syn::Local) {
+        local.attrs.retain(|a| !a.path().is_ident("watch_dep"));
+        syn::visit_mut::visit_local_mut(self, local);
+    }
 }
 
 /// `#[watch_input("name")]` — override the event name a parameter emits under.
@@ -88,6 +113,19 @@ fn strip_watch_input(item: TokenStream) -> TokenStream {
 /// position.
 #[proc_macro_attribute]
 pub fn watch_input(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = attr;
+    item
+}
+
+/// `#[watch_dep("name")]` — observe a dependency call bound by a `let` inside a
+/// `#[watch_operation]` body.
+///
+/// Consumed and rewritten by the enclosing `#[watch_operation]` (which emits one
+/// `name.<arg>` event per call argument, runs the real call, then
+/// `name.response`/`name.error`). Identity in standalone position, in both
+/// configurations.
+#[proc_macro_attribute]
+pub fn watch_dep(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _ = attr;
     item
 }

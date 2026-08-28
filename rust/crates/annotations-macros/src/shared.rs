@@ -13,6 +13,16 @@ pub fn rt() -> TokenStream2 {
     quote! { ::annotations::__rt }
 }
 
+/// A single string-literal attribute argument — the `"name"` in
+/// `#[watch_dep("name")]`. Parses one [`LitStr`] and keeps its value.
+pub struct NameArg(pub String);
+
+impl syn::parse::Parse for NameArg {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self(input.parse::<LitStr>()?.value()))
+    }
+}
+
 /// The token for an item's `component` field: the annotated crate's package
 /// name, taken from `CARGO_PKG_NAME` at the annotated crate's compile time.
 /// Extraction groups operations and types by this component.
