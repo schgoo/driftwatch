@@ -31,6 +31,14 @@ behavior — no hand-authored assertion to weaken.
 - One extraction per code version → two CTSC artifacts: a Registry (contract) and
   an OTLP Trace. CTSC Strict pairs operations by position; input-keyed matching is
   a possible future custom policy.
+- The synthetic return event is named `$result`, keeping the `$` sigil (decided
+  in #31). Params emit as `op.<name>`; the return emits a bare `$result`, so the
+  sigil reserves a namespace a user field/param named `result` cannot shadow,
+  and marks the event as compiler-synthesized. It is baked into the frozen
+  `runtime` crate (`return_emit.rs`) and echoed by `annotations-macros`
+  (`operation.rs`); do NOT rename it — that would edit frozen `runtime` and
+  churn trace canonicalization (the event-name vocabulary the trace-diff keys
+  on).
 
 ## Decision boundaries (need a human owner)
 
