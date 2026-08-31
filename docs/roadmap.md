@@ -40,16 +40,32 @@ test codegen).
 
 ## Artifact format
 
-**One artifact per code-version extraction**, two sections:
+Driftwatch emits **CTSC 0.1** (see `docs/trace-contract.md`). One extraction
+produces two CTSC artifacts:
 
-- `contract` — the normalized schema (registry → spec types).
-- `traces` — **keyed runs**: `{ key, inputs?, events[] }`. The **key** (op +
-  canonicalized inputs) is load-bearing: it aligns run-for-run across versions.
+- **Registry** (`ctsc.registry`) — the normalized contract (registry → typed
+  operations), from `discover`.
+- **Trace** — OTLP `TracesData` (`.otlp.json`/`.otlp.jsonl`), from the runtime
+  buffer: `conformance.run`→`scenario`→`operation` spans with input attributes,
+  observation events, and one completion each.
 
-Two producing mechanisms (already exist in SpecGate as `discover` /
-`run_spec`): static registry for the contract, dynamic buffer for traces. Two
-diff algorithms: structural set-diff (contract) and keyed sequence/value diff
-(traces). The contract-diff **contextualizes** the trace-diff.
+Two producing mechanisms (SpecGate's `discover` / `run_spec`): static registry →
+Registry, dynamic buffer → Trace. Two diffs under a **CTSC comparison policy**
+(default CTSC Strict): structural registry diff (contract) and operation/event/
+value trace diff. The contract-diff **contextualizes** the trace-diff.
+
+## Trace emission contract — CTSC producer profile
+
+Driftwatch emits **CTSC 0.1** (Conformance Trace Semantic Conventions):
+OTLP-based conformance **Trace** + language-neutral **Registry** + **Comparison**
+policy. [`docs/trace-contract.md`](trace-contract.md) is Driftwatch's producer
+profile (annotation→CTSC mapping + producer choices); CTSC itself is normative.
+Adopting CTSC resolves every prior open decision: **D4** (nested sum/enum →
+single-key kvlist tagged union) and **D5** (goldens → CTSC `.otlp.json` corpus);
+non-finite floats project to a registry tagged union; sets emit in stable order
+(Linked for set semantics); comparison is **CTSC Strict**. This realigns the
+artifact format (PR11 → emit CTSC OTLP, not a bespoke binary), the golden corpus
+(PR5 → CTSC corpus), and the registry/discover + diff slices onto CTSC.
 
 ## Salvage map (from SpecGate)
 
@@ -62,9 +78,10 @@ diff algorithms: structural set-diff (contract) and keyed sequence/value diff
 | ▪ C# `SpecGate.Weaver` + `SpecGate.Runtime` | spec-case codegen, the matcher tail of `run_spec` |
 | ▪ the #36 trace goldens + encoder edge tests (the extraction TCB) | |
 
-Trust anchor carried over: the #36 work (exact-trace goldens via derived
-`Debug`, `Value` encoding edge tables, canonicalization findings F1 Set≠List /
-F2 NaN·Inf / F3 loose `PartialEq`). Canonicalization is now **load-bearing**:
+Trust anchor carried over: the #36 work (exact-trace goldens, `Value` encoding
+edge tables, canonicalization findings). Under CTSC: set≠list only under Linked
+(F1), non-finite floats projected to a tagged union (F2), strict `AnyValue`
+equality (F3). Canonicalization is **load-bearing**:
 identical behavior must yield identical extractions or the diff reports engine
 artifacts as false drift.
 
@@ -88,10 +105,26 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
   harness gate (with a starter `evaluate.toml`). ✚ ~450
 
 ### Phase 1 — emitter (extraction TCB)
+
+All emitter work implements a clause of [`docs/trace-contract.md`](trace-contract.md).
+
 - **PR2** ✅ — `runtime` pt1: `Value` (strict structural `Eq`/`Ord`, `Debug`) + `TraceEvent` + `ToValue`; #36 encoder edge tests. Dropped SpecGate's loose equality and hand-written serde (serialization deferred to the artifact-format PR). ▪
-- **PR3** — `runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, mock table, registry (`OpMeta`/`TypeMeta`/discovery), `SpecEvent`. **No serialization** (no JSONL record mode — deferred to the artifact-format PR). ▪ ~400
-- **PR4** — `annotations(-macros)` + facade re-exports. *(decision: keep `spec_*` names or rename `dw_*`)* ▪ ~450
-- **PR5** — minimal fixtures + lift the 51 trace goldens (emission trust anchor). ▪ ~400
+- **PR3** — `runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, registry (`OpMeta`/`TypeMeta`/discovery), `SpecEvent`. **No serialization** (deferred to PR11). ▪ ~400
+- **PR4 core** ✅ *(gh #28)* — `#[watch_operation]` + `#[watch_input]` + `watch_point!` + facade re-exports; per-parameter inputs, field-mutation echo, `$result` via `ReturnEmit`. Macro surface committed as `watch_*` (contract **D1**). ▪
+- **PR4b** *(gh #29 / PR #33, open)* — `#[derive(Watchable)]`: structural struct/enum emission. Unblocks the struct/enum outcome clauses. ▪
+- **PR4c** ✅ *(gh #30 / PR #35)* — `#[watch_dep]` dependency-boundary tracer: per-arg inputs + real-call `.response`/`.error`, optional `?`, `compile_error!` on unsupported shapes. Observation-only (substitution dropped → #27). ▪
+
+- **F0 — ratify the emission contract** ✅ — `docs/trace-contract.md` adopts CTSC 0.1 as Driftwatch's producer profile; D1–D5 resolved (naming, op/dep unification via nested operations, panic→`conformance.fault`, sum/enum→tagged union, goldens→CTSC OTLP corpus). Prereq for the E-items and the golden corpus.
+- **E1 — CTSC completion events** *(profile Events / D2+D3)*: emit operation completion as `conformance.result`/`.empty`/`.error`/`.fault`, and dependencies as **nested `conformance.operation` spans** (own inputs + completion). Value carries via one `ReturnEmit` ladder (L1→L4-opaque). Retires the `Map` `{Ok|Err}`/`{Some|None}` tags and the bespoke `d.response`/`d.error` dep vocabulary. ⚠ ~350
+- **E2 — merge PR4b** (Watchable derive) — prerequisite for struct/enum goldens.
+- **E3 — dependency initializer shapes** *(contract §4.3)*: `?` ✅; `.await`/async-dep support (needs an async operation + test executor); combinators stay `compile_error!`. ✚
+- **E4 — panic disposition** *(profile D3)*: on a caught panic emit `conformance.fault` (+ partial trace, `ERROR` status), no result.
+- **E5 — input surface** *(contract §2)*: capture `&mut` non-receiver params as
+  inputs (pre-call value) — supersedes PR4-core's `&mut` exclusion; hidden
+  inputs stay annotator-captured via `watch_point!`. Update `operation_params`
+  goldens.
+
+- **PR5** *(gh #5)* — the trace **golden corpus** as CTSC `.otlp.json` fixtures (per **D5**) covering every profile clause; re-author the SpecGate `mock_*` goldens as real-dependency (nested-operation) observation. Reuse SpecGate's CTSC corpus + `validate.py`. The emission trust anchor + the ongoing TDD spec (new clause → golden → implement). ▪ ~400
 - **PR5.5** *(gh #24)* — **mutation testing** capstone: `cargo-mutants` scoped to
   the emitter TCB (`runtime` + `annotations(-macros)`), run against the native
   encoder tests + trace goldens only (non-circular oracle), survivors triaged to
@@ -99,13 +132,12 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
   on PR5 (the goldens are the kill oracle). ✚
 
 ### Phase 1.5 — artifact format (reprioritized; load-bearing)
-- **PR11** *(moved earlier from Phase 4)* — **artifact serialization format** +
-  keyed trace model. The format must round-trip `Value`/`TraceEvent` faithfully
-  (Set≠List, `NaN`/`Inf`/`-0.0`), so JSON is unsuitable: use **derived** serde
-  over a **binary self-describing** format (CBOR/postcard/bincode), never
-  hand-written serde. Keyed runs `{key, inputs?, events[]}` + key derivation.
-  Foundational — every persistence path (record, collect, snapshot, compare)
-  depends on it. ✚ load-bearing
+- **PR11** *(moved earlier from Phase 4)* — **CTSC OTLP emitter**: serialize the
+  runtime buffer to CTSC Trace (`.otlp.json`/`.otlp.jsonl`) and `Value`→OTLP
+  `AnyValue` per profile §Values (`u64`→decimal string, non-finite→tagged union,
+  set→stable-ordered array). JSON is faithful (non-finite floats are projected,
+  not raw). Foundational — every persistence path (record, collect, snapshot,
+  compare) depends on it. ✚ load-bearing
 
 ### Phase 2 — contract
 - **PR6** — `contract`: lift types, strip `cases`, keep name/types/operations/binding + validation; `.spec.yaml`→`.contract.yaml`. ⚠ ~450
@@ -113,13 +145,13 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
 ### Phase 3 — extraction driver (drop the matcher)
 - **PR7** — binding resolution (drop matcher bits). ▪ ~350
 - **PR8** — runner codegen: drive ops → emit traces (artifact format, no `expected:`/matcher). ⚠ ~450
-- **PR9** — build+run+collect: invoke cargo/dotnet, capture keyed traces (`run_spec` front half minus match tail). ⚠ ~400
+- **PR9** — build+run+collect: invoke cargo/dotnet, capture CTSC traces (`run_spec` front half minus match tail). ⚠ ~400
 - **PR10** — contract extraction: `discover` slice (registry → normalized schema). ▪ ~350
 
 
 ### Phase 5 — diff (new)
 - **PR12** — contract-diff: structural diff + breaking-change classification + report. ✚ ~450
-- **PR13** — trace-diff: align keyed runs, canonical event divergence, first-divergence report. ✚ ~450
+- **PR13** — trace-diff: CTSC comparison (Strict) — pair operations, diff events/values, first-divergence report. ✚ ~450
 
 ### Phase 6 — CLI (new)
 - **PR14** — CLI skeleton + `snapshot` (extract → artifact). ✚ ~300
@@ -127,7 +159,7 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
 - **PR16** — `--mode full/diff/pr`, `--base`, `--pr` orchestration. ✚ ~400
 
 ### Phase 7 — C# backend (parallelizable after Phase 1)
-- **PR17** — lift `SpecGate.Runtime` (C# emitter + trace JSON). ▪ ~400
+- **PR17** — lift `SpecGate.Runtime` (C# emitter → CTSC OTLP). ▪ ~400
 - **PR18** — lift `SpecGate.Weaver` (IL weave). ▪ ~450
 - **PR19** — C# trace goldens, driven & case-aligned with Rust. ✚ ~300
 - **PR20** — cross-language compare wiring (drive both, diff). ✚ ~300
@@ -146,8 +178,12 @@ runs are slow.
 
 ## Open decisions
 
-1. Macro naming: keep `spec_*` or rename `dw_*`.
-2. Artifact format: binary self-describing (CBOR/postcard/bincode) via derived serde — must be faithful (Set≠List, floats); extension (`.dw`?). Owned by the artifact-format PR (#11). ✅ direction set (see #11).
+Emission-shape / canonicalization decisions (**D1–D5**) are **resolved** by
+adopting CTSC 0.1; see [`docs/trace-contract.md`](trace-contract.md).
+
+1. Macro naming: `watch_*` (final — **D1**).
+2. Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — non-finite
+   floats project to a tagged union, so JSON is faithful; owned by PR11. ✅
 3. Ship contract-diff before trace-diff (recommended — metadata drift is the
    cheap, always-available, coverage-independent first product).
 
