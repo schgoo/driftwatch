@@ -38,6 +38,15 @@ pub enum Value {
     Map(BTreeMap<String, Value>),
     /// A set of values, kept sorted for deterministic output.
     Set(BTreeSet<Value>),
+    /// A tagged union: variant name -> payload. Encodes to a single-key
+    /// kvlist per CTSC trace 8.5. A payload-less variant carries CTSC unit
+    /// (an empty Map).
+    Variant {
+        /// The variant label (free-form; type identity lives in the registry).
+        tag: String,
+        /// The variant payload; CTSC unit (an empty Map) for a payload-less arm.
+        value: Box<Value>,
+    },
 }
 
 impl Value {
@@ -52,7 +61,27 @@ impl Value {
             Value::List(_) => "list",
             Value::Map(_) => "map",
             Value::Set(_) => "set",
+            Value::Variant { .. } => "variant",
         }
+    }
+
+    /// Builds a tagged-union [`Value::Variant`] carrying `value` as its payload.
+    ///
+    /// The `tag` is free-form: type identity lives in the registry (CTSC-Linked),
+    /// not in the label. Use [`Value::variant_unit`] for a payload-less arm.
+    #[must_use]
+    pub fn variant(tag: impl Into<String>, value: Value) -> Value {
+        Value::Variant {
+            tag: tag.into(),
+            value: Box::new(value),
+        }
+    }
+
+    /// Builds a payload-less tagged-union variant whose payload is CTSC unit
+    /// (an empty [`Value::Map`]).
+    #[must_use]
+    pub fn variant_unit(tag: impl Into<String>) -> Value {
+        Value::variant(tag, Value::Map(BTreeMap::new()))
     }
 }
 
@@ -73,6 +102,7 @@ fn variant_rank(value: &Value) -> u8 {
         Value::List(_) => 4,
         Value::Set(_) => 5,
         Value::Map(_) => 6,
+        Value::Variant { .. } => 7,
     }
 }
 
@@ -103,6 +133,9 @@ impl Ord for Value {
             (Value::List(a), Value::List(b)) => a.cmp(b),
             (Value::Map(a), Value::Map(b)) => a.cmp(b),
             (Value::Set(a), Value::Set(b)) => a.cmp(b),
+            (Value::Variant { tag: ta, value: va }, Value::Variant { tag: tb, value: vb }) => {
+                ta.cmp(tb).then_with(|| va.cmp(vb))
+            }
             (a, b) => variant_rank(a).cmp(&variant_rank(b)),
         }
     }
@@ -203,6 +236,64 @@ mod tests {
         assert_eq!(Value::List(Vec::new()).type_name(), "list");
         assert_eq!(Value::Map(BTreeMap::new()).type_name(), "map");
         assert_eq!(Value::Set(BTreeSet::new()).type_name(), "set");
+        assert_eq!(Value::variant_unit("A").type_name(), "variant");
+    }
+
+    #[test]
+    fn variant_constructors() {
+        // Explicit payload.
+        assert_eq!(
+            Value::variant("Wrapped", Value::Integer(3)),
+            Value::Variant {
+                tag: "Wrapped".to_string(),
+                value: Box::new(Value::Integer(3)),
+            }
+        );
+        // Payload-less arm carries CTSC unit (an empty Map).
+        assert_eq!(
+            Value::variant_unit("Active"),
+            Value::Variant {
+                tag: "Active".to_string(),
+                value: Box::new(Value::Map(BTreeMap::new())),
+            }
+        );
+    }
+
+    #[test]
+    fn variant_debug_roundtrip() {
+        let v = Value::variant("Named", Value::String("x".to_string()));
+        assert_eq!(
+            format!("{v:?}"),
+            r#"Variant { tag: "Named", value: String("x") }"#
+        );
+        assert_eq!(v, v.clone());
+    }
+
+    #[test]
+    fn variant_sorts_after_map_and_set() {
+        use std::cmp::Ordering;
+        // Append rank: Variant is the highest, so it sorts after Map and Set.
+        assert_eq!(
+            Value::Map(BTreeMap::new()).cmp(&Value::variant_unit("A")),
+            Ordering::Less
+        );
+        assert_eq!(
+            Value::Set(BTreeSet::new()).cmp(&Value::variant_unit("A")),
+            Ordering::Less
+        );
+        // Within variant: compare tag, then payload.
+        assert_eq!(
+            Value::variant_unit("A").cmp(&Value::variant_unit("B")),
+            Ordering::Less
+        );
+        assert_eq!(
+            Value::variant("A", Value::Integer(1)).cmp(&Value::variant("A", Value::Integer(2))),
+            Ordering::Less
+        );
+        assert_eq!(
+            Value::variant("A", Value::Integer(1)).cmp(&Value::variant("A", Value::Integer(1))),
+            Ordering::Equal
+        );
     }
 
     #[test]

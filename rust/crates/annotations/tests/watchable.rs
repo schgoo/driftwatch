@@ -82,20 +82,20 @@ fn struct_emit_fields_emits_tagged_fields() {
 
 #[test]
 fn enum_to_value_tags_each_variant_shape() {
-    assert_eq!(
-        Status::Active.to_value(),
-        map(&[("Active", Value::Map(std::collections::BTreeMap::new()))])
-    );
+    // Each variant projects to a `Value::Variant` (tagged union, CTSC 8.5): a
+    // payload-less arm carries CTSC unit (an empty Map); a named arm carries a
+    // string-keyed map of its fields.
+    assert_eq!(Status::Active.to_value(), Value::variant_unit("Active"));
     assert_eq!(
         Status::Named {
             label: "x".to_string()
         }
         .to_value(),
-        map(&[("Named", map(&[("label", Value::String("x".into()))]))])
+        Value::variant("Named", map(&[("label", Value::String("x".into()))]))
     );
     assert_eq!(
         Status::Wrapped(3).to_value(),
-        map(&[("Wrapped", Value::Map(std::collections::BTreeMap::new()))])
+        Value::variant_unit("Wrapped")
     );
 }
 
