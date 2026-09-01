@@ -1,24 +1,15 @@
-//! `#[watch_dep("name")]` — per-argument input events plus response/error
-//! emission around a real dependency call bound by a `let` inside an operation
-//! body.
+//! `#[watch_dep("name")]`: per-argument input events plus response/error
+//! emission around a real dependency call in a `#[watch_operation]` body.
 //!
-//! The observed call is `i64::from_str_radix`, a standard-library function the
-//! target crate neither owns nor annotates: `#[watch_dep]` needs nothing from the
-//! callee beyond its arguments and a `Result` return, so it stands in for a real
-//! dependency in another crate. Like `#[watch_operation]`'s parameters, each
-//! argument is emitted individually — by identifier (`parse.text`), or
-//! positionally for a non-identifier argument (`parse.arg1` for the `16`
-//! literal).
+//! The observed call is `i64::from_str_radix` (an unannotated std function);
+//! each argument is emitted by identifier (`parse.text`) or positionally
+//! (`parse.arg1` for the `16` literal).
 //!
-//! Feature-matrix coverage:
-//! - `Ok` path → each input event then `name.response` bracket the real call;
-//! - `Err` path → each input event then `name.error` (the dependency's own
-//!   `Display`, captured verbatim);
-//! - a trailing `?` on the call is supported: the `Result` is observed before
-//!   the `?` unwraps, and on the `Err` path the `?` propagates the error out of
-//!   the op (whose boundary still records it as a tagged `Err` `$result`);
-//! - the real call always runs and its `Result` binds unchanged (no
-//!   substitution, no `Default`).
+//! Coverage:
+//! - `Ok`: each input event then `name.response`;
+//! - `Err`: each input event then `name.error` (the callee's `Display`);
+//! - trailing `?`: `Result` observed before the `?` unwraps, then propagated;
+//! - the real call always runs, its `Result` binds unchanged.
 
 mod common;
 

@@ -1,12 +1,9 @@
-//! Production gating: the same annotated code — including a `#[watch_dep]`
-//! binding, whose helper attribute must be stripped off-trace so the item still
-//! compiles — emits under `trace` and is inert (identity expansion, no events)
-//! with the default (no-`trace`) build.
+//! Production gating: the same annotated code (including a `#[watch_dep]`
+//! binding) emits under `trace` and expands to inert identity (no events)
+//! with the default no-`trace` build.
 //!
-//! Run the off path with `cargo test -p annotations` (default features) and the
-//! on path with `cargo test -p annotations --all-features`. Unlike the other
-//! emission tests this one is NOT `#[ignore]`d off-trace: it asserts the correct
-//! behavior in BOTH configs via `cfg`.
+//! Run the off path with `cargo test -p annotations`, the on path with
+//! `--all-features`. Asserts both configs via `cfg` (not `#[ignore]`d).
 
 use annotations::{reset, take_events, watch_operation, watch_point};
 
