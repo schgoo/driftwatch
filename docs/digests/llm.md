@@ -22,19 +22,28 @@ behavior — no hand-authored assertion to weaken.
 
 - `Value` has strict, structural `Eq`/`Ord` (PR2 #2): equal iff same variant and
   contents; `eq` is `cmp(..) == Equal`. SpecGate's loose equality (Int==Float,
-  List==Set) was removed, so `==` is a faithful comparison here (this resolves
-  the old F3). The serde wire form is still lossy — a `Set` serializes like a
-  `List`, and `NaN`/`Inf` are not JSON-representable (the standing F1/F2) — so it
-  is for persistence, not comparison.
+  List==Set) was removed, so `==` is faithful (resolves the old F3, kept as CTSC
+  strict `AnyValue` equality). Under CTSC: a `Set` wires as a stable-ordered array
+  (set≠list only under Linked, F1); non-finite floats project to a tagged union
+  (F2). Values serialize as OTLP `AnyValue`.
 - Contract extraction is static/complete/deterministic; trace extraction is
   dynamic/coverage-limited and must be canonicalized before diffing.
-- One artifact per code version: `{contract, traces[keyed]}`. The trace key
-  (op + canonicalized inputs) aligns runs across versions.
+- One extraction per code version → two CTSC artifacts: a Registry (contract) and
+  an OTLP Trace. CTSC Strict pairs operations by position; input-keyed matching is
+  a possible future custom policy.
+- The synthetic return event is named `$result`, keeping the `$` sigil (decided
+  in #31). Params emit as `op.<name>`; the return emits a bare `$result`, so the
+  sigil reserves a namespace a user field/param named `result` cannot shadow,
+  and marks the event as compiler-synthesized. It is baked into the frozen
+  `runtime` crate (`return_emit.rs`) and echoed by `annotations-macros`
+  (`operation.rs`); do NOT rename it — that would edit frozen `runtime` and
+  churn trace canonicalization (the event-name vocabulary the trace-diff keys
+  on).
 
 ## Decision boundaries (need a human owner)
 
-- Artifact format/extension (`.dw`? JSON vs keyed-JSONL).
-- Trace canonicalization rules.
+- Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — resolved via CTSC adoption.
+- Trace emission contract: **CTSC 0.1 producer profile** (docs/trace-contract.md); D1-D5 resolved. Observable shape + canonicalization owned there.
 - CLI surface (`snapshot` / `compare` / `--mode full|diff|pr`).
 - Macro naming (`spec_*` vs `dw_*`).
 

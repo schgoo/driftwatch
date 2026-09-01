@@ -15,8 +15,8 @@
 //!
 //! # Public surface
 //!
-//! - Macros: [`watch_operation`], [`watch_dep`], [`watch_point`], and
-//!   [`watch_input`].
+//! - Macros: [`watch_operation`], [`watch_dep`], [`watch_point`],
+//!   [`watch_input`], and the [`Watchable`](macro@Watchable) derive.
 //! - Runtime items users interact with directly: [`Value`], [`ToValue`],
 //!   [`WatchEvent`], [`take_events`], and [`reset`].
 //!
@@ -29,7 +29,7 @@
 //! and turns on emission plus the link-time registry; this is exactly what the
 //! extraction driver does while taking a snapshot.
 
-pub use annotations_macros::{watch_dep, watch_input, watch_operation, watch_point};
+pub use annotations_macros::{Watchable, watch_dep, watch_input, watch_operation, watch_point};
 pub use runtime::{ToValue, Value, WatchEvent, reset, take_events};
 
 /// Hidden plumbing the generated macro code funnels through. Not part of the

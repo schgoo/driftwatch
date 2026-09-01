@@ -19,7 +19,8 @@
 //!   `#[watch_input]` / `#[watch_dep]` helper attributes, which cannot stand
 //!   alone on a param or a statement);
 //! - `#[watch_input]` / `#[watch_dep]` → the annotated statement unchanged;
-//! - `watch_point!(…)` → `()`.
+//! - `watch_point!(…)` → `()`;
+//! - `#[derive(Watchable)]` → nothing (no impls, no registry statics).
 //!
 //! # Layout exception
 //!
@@ -41,6 +42,8 @@ mod operation;
 mod point;
 #[cfg(feature = "trace")]
 mod shared;
+#[cfg(feature = "trace")]
+mod watchable;
 
 use proc_macro::TokenStream;
 
@@ -128,6 +131,24 @@ pub fn watch_input(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn watch_dep(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _ = attr;
     item
+}
+
+/// `#[derive(Watchable)]` — emit field/variant events and register a type.
+///
+/// Structs emit each `#[watchable]`-tagged field (honoring
+/// `#[watchable(name = "…")]`); enums emit a per-variant tag. Off-trace the
+/// derive expands to nothing (no impls, no registry).
+#[proc_macro_derive(Watchable, attributes(watchable))]
+pub fn derive_watchable(input: TokenStream) -> TokenStream {
+    #[cfg(feature = "trace")]
+    {
+        watchable::expand(input)
+    }
+    #[cfg(not(feature = "trace"))]
+    {
+        let _ = input;
+        TokenStream::new()
+    }
 }
 
 /// `watch_point!("name", &expr)` — emit one inline checkpoint event.
