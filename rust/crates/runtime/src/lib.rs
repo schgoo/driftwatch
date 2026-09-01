@@ -73,6 +73,7 @@
 mod buffer;
 mod registry;
 mod return_emit;
+mod span;
 mod to_value;
 mod value;
 mod watch_event;
@@ -84,6 +85,9 @@ pub use registry::{
 };
 pub use return_emit::{
     ReturnEmit, ReturnEmitDisplay, ReturnEmitNone, ReturnEmitStruct, ReturnEmitToValue,
+};
+pub use span::{
+    EventName, Span, SpanEvent, SpanGuard, SpanName, open_span, push_event, take_spans,
 };
 pub use to_value::ToValue;
 pub use value::Value;
