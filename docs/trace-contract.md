@@ -75,8 +75,7 @@ Values are encoded per CTSC trace §8. Source-type resolution:
 | tuple | list |
 | set / unordered collection (Rust `HashSet`/`BTreeSet`, C# `HashSet`) | set — emitted in stable (sorted) order |
 | ordered collection projected as list | list — deterministic order preserved |
-| finite float (`f32`/`f64`, C# `float`/`double`) | double |
-| non-finite float (`NaN`, `±Infinity`) | tagged union — `{nan}` / `{pos_inf}` / `{neg_inf}` |
+| float (`f32`/`f64`, C# `float`/`double`) | double — finite as a number; non-finite as OTLP `"NaN"`/`"Infinity"`/`"-Infinity"` (CTSC §8.4) |
 
 Tagged-union variant labels carry no type identity; that lives in the registry
 (Linked), so two types sharing a variant label are equal at Trace Core.
@@ -90,10 +89,10 @@ Tagged-union variant labels carry no type identity; that lives in the registry
 3. **Declared-error mapping.** Each native error / declared exception maps
    deterministically to a registry-declared `conformance.error.name`; an unmapped
    failure is a `conformance.fault`.
-4. **Non-finite floats project to a tagged union.** `NaN`/`±Infinity` have no valid
-   CTSC `doubleValue`, so they encode as a registry-declared tagged union
-   (`{nan}`/`{pos_inf}`/`{neg_inf}`), keeping the target traceable and making a
-   finite→non-finite return a visible drift. Finite floats use `doubleValue`.
+4. **NaN canonicalization.** Non-finite floats wire as OTLP `doubleValue` strings
+   (`"NaN"`/`"Infinity"`/`"-Infinity"`, CTSC §8.4). OTLP does not preserve NaN
+   payload bits, so the runtime normalizes every NaN to canonical `"NaN"` at the
+   OTLP boundary — bitwise-distinct NaNs must not surface as false drift.
 5. **Feature gating.** When tracing is disabled (Rust: `trace` feature off; C#:
    build symbol), annotations expand to identity; a purpose-built OTLP recorder is
    used — no OpenTelemetry SDK dependency.

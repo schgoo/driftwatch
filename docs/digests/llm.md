@@ -13,19 +13,19 @@ behavior — no hand-authored assertion to weaken.
 
 ## Current state
 
-- **Phase: planning.** Only `AGENTS.md` and `docs/` exist. No Rust crates yet.
-- Migration plan: `docs/roadmap.md` (20 PRs, phases 0–7).
+- **Phase: 1 (emitter).** `rust/` workspace + crate scaffold exist (`runtime`, `annotations(-macros)`, `contract`, `extract`, `diff`, `cli`); the emitter crates are implemented through the annotation surface (#1-#4, #29-#30 merged). CTSC emission migration (#37 onward) is the active work.
+- Migration plan: `docs/roadmap.md` (issue-numbered work items, phases 0–7).
 - Origin: clean-room reboot of SpecGate; lift the extraction half, drop the
   TDD/matcher half.
 
 ## Invariants
 
-- `Value` has strict, structural `Eq`/`Ord` (PR2 #2): equal iff same variant and
+- `Value` has strict, structural `Eq`/`Ord` (#2): equal iff same variant and
   contents; `eq` is `cmp(..) == Equal`. SpecGate's loose equality (Int==Float,
   List==Set) was removed, so `==` is faithful (resolves the old F3, kept as CTSC
   strict `AnyValue` equality). Under CTSC: a `Set` wires as a stable-ordered array
-  (set≠list only under Linked, F1); non-finite floats project to a tagged union
-  (F2). Values serialize as OTLP `AnyValue`.
+  (set≠list only under Linked, F1); non-finite floats wire as OTLP `doubleValue` strings
+  (`"NaN"`/`"Infinity"`/`"-Infinity"`, CTSC §8.4; NaN payloads normalized, F2). Values serialize as OTLP `AnyValue`.
 - Contract extraction is static/complete/deterministic; trace extraction is
   dynamic/coverage-limited and must be canonicalized before diffing.
 - One extraction per code version → two CTSC artifacts: a Registry (contract) and
@@ -45,7 +45,6 @@ behavior — no hand-authored assertion to weaken.
 - Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — resolved via CTSC adoption.
 - Trace emission contract: **CTSC 0.1 producer profile** (docs/trace-contract.md); D1-D5 resolved. Observable shape + canonicalization owned there.
 - CLI surface (`snapshot` / `compare` / `--mode full|diff|pr`).
-- Macro naming (`spec_*` vs `dw_*`).
 
 ## File organization
 

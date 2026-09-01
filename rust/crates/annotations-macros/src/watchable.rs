@@ -142,9 +142,7 @@ fn build_variant(name: &Ident, variant: &syn::Variant, rt: &TokenStream2) -> Var
             },
             to_value_arm: quote! {
                 #name::#vname => {
-                    let mut __dw_outer = ::std::collections::BTreeMap::new();
-                    __dw_outer.insert(#vname_str.to_string(), #rt::Value::Map(::std::collections::BTreeMap::new()));
-                    #rt::Value::Map(__dw_outer)
+                    #rt::Value::variant_unit(#vname_str)
                 }
             },
         },
@@ -185,9 +183,10 @@ fn build_variant(name: &Ident, variant: &syn::Variant, rt: &TokenStream2) -> Var
                         #(
                             __dw_inner.insert(#field_strs.to_string(), #rt::ToValue::to_value(#field_idents));
                         )*
-                        let mut __dw_outer = ::std::collections::BTreeMap::new();
-                        __dw_outer.insert(#vname_str.to_string(), #rt::Value::Map(__dw_inner));
-                        #rt::Value::Map(__dw_outer)
+                        #rt::Value::Variant {
+                            tag: #vname_str.to_string(),
+                            value: ::std::boxed::Box::new(#rt::Value::Map(__dw_inner)),
+                        }
                     }
                 },
             }
@@ -201,9 +200,7 @@ fn build_variant(name: &Ident, variant: &syn::Variant, rt: &TokenStream2) -> Var
             },
             to_value_arm: quote! {
                 #name::#vname(..) => {
-                    let mut __dw_outer = ::std::collections::BTreeMap::new();
-                    __dw_outer.insert(#vname_str.to_string(), #rt::Value::Map(::std::collections::BTreeMap::new()));
-                    #rt::Value::Map(__dw_outer)
+                    #rt::Value::variant_unit(#vname_str)
                 }
             },
         },
