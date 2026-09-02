@@ -47,13 +47,14 @@ mod watchable;
 
 use proc_macro::TokenStream;
 
-/// `#[watch_operation]` — mark a function as an operation.
+/// `#[watch_operation(component = "...")]` — mark a function as an operation.
 ///
-/// The operation name is the function name and the component is the annotated
-/// crate's package name (`CARGO_PKG_NAME`). Expansion emits a `Run` marker, one event per value
-/// parameter, a `$result` on every return path, echoes field mutations of
-/// `self`/parameters, and registers the operation for discovery. Takes no
-/// arguments.
+/// The operation name is the function name and the component is author-declared
+/// (mandatory: a missing `component` is a `compile_error!`). Expansion opens a
+/// `conformance.operation` span (inputs as one kvlist attribute), pushes a
+/// completion event (`result`/`empty`/`error`) on every return path, echoes
+/// field mutations of `self`/parameters as `conformance.observation` events, and
+/// registers the operation for discovery.
 #[proc_macro_attribute]
 pub fn watch_operation(attr: TokenStream, item: TokenStream) -> TokenStream {
     #[cfg(feature = "trace")]
@@ -120,24 +121,25 @@ pub fn watch_input(attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
-/// `#[watch_dep("name")]` — observe a dependency call bound by a `let` inside a
-/// `#[watch_operation]` body.
+/// `#[watch_dep("name", component = "...")]` — observe a dependency call bound
+/// by a `let` inside a `#[watch_operation]` body.
 ///
-/// Consumed and rewritten by the enclosing `#[watch_operation]` (which emits one
-/// `name.<arg>` event per call argument, runs the real call, then
-/// `name.response`/`name.error`). Identity in standalone position, in both
-/// configurations.
+/// Consumed and rewritten by the enclosing `#[watch_operation]`, which opens a
+/// nested `conformance.operation` span (own inputs + completion) around the real
+/// call; `component` is optional and defaults to the enclosing operation's.
+/// Identity in standalone position, in both configurations.
 #[proc_macro_attribute]
 pub fn watch_dep(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _ = attr;
     item
 }
 
-/// `#[derive(Watchable)]` — emit field/variant events and register a type.
+/// `#[derive(Watchable)]` — decompose a type to a `Value` and register it.
 ///
-/// Structs emit each `#[watchable]`-tagged field (honoring
-/// `#[watchable(name = "…")]`); enums emit a per-variant tag. Off-trace the
-/// derive expands to nothing (no impls, no registry).
+/// Structs decompose each `#[watchable]`-tagged field (honoring
+/// `#[watchable(name = "…")]`) to a `Value::Map`; enums decompose to a
+/// `Value::Variant` per variant. Off-trace the derive expands to nothing (no
+/// impls, no registry).
 #[proc_macro_derive(Watchable, attributes(watchable))]
 pub fn derive_watchable(input: TokenStream) -> TokenStream {
     #[cfg(feature = "trace")]

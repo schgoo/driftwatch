@@ -4,7 +4,9 @@
 //! Feature-matrix coverage: `discovery_json()` output shape/ordering and JSON
 //! validity. This crate registers exactly one operation and no types, so the
 //! output is fully deterministic — the test locks the entire string. The
-//! `component` is the annotated crate's package name (`annotations`).
+//! `component` is the author-declared literal (`annotations.compute`), which is
+//! deliberately distinct from the crate name so the golden proves the component
+//! source moved off `CARGO_PKG_NAME`.
 
 use annotations::watch_operation;
 
@@ -15,7 +17,7 @@ use annotations::watch_operation;
         reason = "identity (trace-off) form only borrows `b`; the shape exercises a String param"
     )
 )]
-#[watch_operation]
+#[watch_operation(component = "annotations.compute")]
 fn compute(a: i64, b: String) -> i64 {
     let _ = &b;
     a
@@ -34,13 +36,13 @@ fn discovery_json_is_exact_and_valid() {
     // Exact string: locks ordering and content for the single registered op.
     assert_eq!(
         json,
-        r#"{"operations":[{"name":"compute","module_path":"discovery","fn_name":"compute","is_setup":false,"is_async":false,"return_type":"i64","fills":"","component":"annotations","params":[["a","i64"],["b","String"]]}],"types":[]}"#
+        r#"{"operations":[{"name":"compute","module_path":"discovery","fn_name":"compute","is_setup":false,"is_async":false,"return_type":"i64","fills":"","component":"annotations.compute","params":[["a","i64"],["b","String"]]}],"types":[]}"#
     );
 
     // Also prove it parses as valid JSON and navigates as expected.
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed["operations"][0]["name"], "compute");
-    assert_eq!(parsed["operations"][0]["component"], "annotations");
+    assert_eq!(parsed["operations"][0]["component"], "annotations.compute");
     assert_eq!(parsed["operations"][0]["params"][1][0], "b");
     assert!(parsed["types"].as_array().unwrap().is_empty());
 }

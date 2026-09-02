@@ -4,7 +4,10 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{FnArg, Ident, ItemFn, LitStr, Pat, ReturnType, Type};
+use syn::parse::ParseStream;
+use syn::{
+    FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, PathArguments, ReturnType, Token, Type,
+};
 
 /// The funnel path the generated code references. Everything the macros expand
 /// into is reached through the facade's hidden `__rt` module, so annotated
@@ -13,34 +16,149 @@ pub fn rt() -> TokenStream2 {
     quote! { ::annotations::__rt }
 }
 
-/// A single string-literal attribute argument — the `"name"` in
-/// `#[watch_dep("name")]`. Parses one [`LitStr`] and keeps its value.
-pub struct NameArg(pub String);
+/// Diagnostic when `#[watch_operation]` is applied without a component.
+pub const MISSING_COMPONENT: &str =
+    "`#[watch_operation]` requires a component: `#[watch_operation(component = \"...\")]`";
 
-impl syn::parse::Parse for NameArg {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(Self(input.parse::<LitStr>()?.value()))
+/// The arguments of `#[watch_operation(component = "...")]`. The component is
+/// **mandatory**: it supplies both the span's `conformance.component.id` and the
+/// registry `OpMeta.component`, and is language-agnostic (a Rust and a C#
+/// implementation of the same component declare the same id).
+#[derive(Debug)]
+pub struct OperationArgs {
+    /// The author-declared component id.
+    pub component: String,
+}
+
+impl syn::parse::Parse for OperationArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.is_empty() {
+            return Err(syn::Error::new(
+                proc_macro2::Span::call_site(),
+                MISSING_COMPONENT,
+            ));
+        }
+        let key: Ident = input.parse()?;
+        if key != "component" {
+            return Err(syn::Error::new(key.span(), MISSING_COMPONENT));
+        }
+        let _: Token![=] = input.parse()?;
+        let value: LitStr = input.parse()?;
+        let component = value.value();
+        if component.is_empty() {
+            return Err(syn::Error::new(value.span(), MISSING_COMPONENT));
+        }
+        Ok(Self { component })
     }
 }
 
-/// The token for an item's `component` field: the annotated crate's package
-/// name, taken from `CARGO_PKG_NAME` at the annotated crate's compile time.
-/// Extraction groups operations and types by this component.
-pub fn component_tokens() -> TokenStream2 {
-    quote! { ::core::env!("CARGO_PKG_NAME") }
+/// The arguments of `#[watch_dep("name", component = "...")]`. The name is
+/// mandatory; the component is optional and defaults to the enclosing
+/// operation's effective component.
+#[derive(Debug)]
+pub struct DepArgs {
+    /// The dependency (nested-operation) name.
+    pub name: String,
+    /// An explicit component override, or `None` to inherit the parent's.
+    pub component: Option<String>,
 }
 
-/// How an operation's return type is emitted as `$result`.
+impl syn::parse::Parse for DepArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let name = input.parse::<LitStr>()?.value();
+        let mut component = None;
+        if input.peek(Token![,]) {
+            let _: Token![,] = input.parse()?;
+            let key: Ident = input.parse()?;
+            if key != "component" {
+                return Err(syn::Error::new(
+                    key.span(),
+                    "expected `component = \"...\"`",
+                ));
+            }
+            let _: Token![=] = input.parse()?;
+            component = Some(input.parse::<LitStr>()?.value());
+        }
+        Ok(Self { name, component })
+    }
+}
+
+/// The CTSC `error.name` fallback for a `Result<T, E>` return: the last path
+/// segment of `E` (stringified). Used when the decomposed error value is not a
+/// tagged variant. Falls back to `"error"` when `E` is not an inspectable path.
+pub fn result_error_name(output: &ReturnType) -> String {
+    if let ReturnType::Type(_, ty) = output
+        && let Some(err) = result_err_type(ty)
+        && let Type::Path(p) = err
+        && let Some(seg) = p.path.segments.last()
+    {
+        return seg.ident.to_string();
+    }
+    "error".to_string()
+}
+
+/// The `E` type of a `Result<T, E>` return, if the outer path is `Result` with
+/// two generic arguments.
+fn result_err_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(p) = ty else { return None };
+    let seg = p.path.segments.last()?;
+    if seg.ident != "Result" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(args) = &seg.arguments else {
+        return None;
+    };
+    let types: Vec<&Type> = args
+        .args
+        .iter()
+        .filter_map(|a| match a {
+            GenericArgument::Type(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+    types.get(1).copied()
+}
+
+/// The `T` type of a `Result<T, E>` return, if inspectable.
+fn result_ok_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(p) = ty else { return None };
+    let seg = p.path.segments.last()?;
+    if seg.ident != "Result" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(args) = &seg.arguments else {
+        return None;
+    };
+    args.args.iter().find_map(|a| match a {
+        GenericArgument::Type(t) => Some(t),
+        _ => None,
+    })
+}
+
+/// True when `ty` is an outer `Option<..>`.
+fn is_option(ty: &Type) -> bool {
+    matches!(ty, Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "Option"))
+}
+
+/// How an operation's return type is mapped to a CTSC completion event.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ReturnKind {
+    /// `()` / absent → no completion event.
     Unit,
+    /// `Result<T, E>` → `result` (Ok) / `error` (Err).
     Result,
+    /// `Result<Option<T>, E>` → `result` (Ok(Some)) / `empty` (Ok(None)) /
+    /// `error` (Err). A static peel of the nested `Option`.
+    ResultOption,
+    /// `Option<T>` → `result` (Some) / `empty` (None).
     Option,
+    /// Anything else → `result`.
     Other,
 }
 
 /// Classify a return type by the outermost path segment (`Result`/`Option`),
-/// treating `()`/absent as `Unit` and everything else as `Other`.
+/// treating `()`/absent as `Unit` and everything else as `Other`. A
+/// `Result<Option<T>, E>` is recognized as [`ReturnKind::ResultOption`].
 pub fn classify_return(ty: &ReturnType) -> ReturnKind {
     match ty {
         ReturnType::Default => ReturnKind::Unit,
@@ -53,7 +171,13 @@ pub fn classify_return(ty: &ReturnType) -> ReturnKind {
                 .map(|s| s.ident.to_string())
                 .as_deref()
             {
-                Some("Result") => ReturnKind::Result,
+                Some("Result") => {
+                    if result_ok_type(t).is_some_and(is_option) {
+                        ReturnKind::ResultOption
+                    } else {
+                        ReturnKind::Result
+                    }
+                }
                 Some("Option") => ReturnKind::Option,
                 _ => ReturnKind::Other,
             },
@@ -167,4 +291,65 @@ pub fn sanitize_ident(s: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_component_is_rejected() {
+        // A bare `#[watch_operation]` (empty args) must fail to parse.
+        syn::parse_str::<OperationArgs>("").unwrap_err();
+    }
+
+    #[test]
+    fn empty_component_is_rejected() {
+        syn::parse_str::<OperationArgs>(r#"component = """#).unwrap_err();
+    }
+
+    #[test]
+    fn non_component_key_is_rejected() {
+        syn::parse_str::<OperationArgs>(r#"spec = "x""#).unwrap_err();
+    }
+
+    #[test]
+    fn component_is_parsed() {
+        assert_eq!(
+            syn::parse_str::<OperationArgs>(r#"component = "comp.app""#)
+                .unwrap()
+                .component,
+            "comp.app"
+        );
+    }
+
+    #[test]
+    fn dep_name_only_inherits_component() {
+        let args = syn::parse_str::<DepArgs>(r#""parse""#).unwrap();
+        assert_eq!(args.name, "parse");
+        assert_eq!(args.component, None);
+    }
+
+    #[test]
+    fn dep_component_override_is_parsed() {
+        let args = syn::parse_str::<DepArgs>(r#""parse", component = "other""#).unwrap();
+        assert_eq!(args.name, "parse");
+        assert_eq!(args.component.as_deref(), Some("other"));
+    }
+
+    #[test]
+    fn result_error_name_uses_last_segment() {
+        let out: ReturnType = syn::parse_str("-> Result<i64, std::num::ParseIntError>").unwrap();
+        assert_eq!(result_error_name(&out), "ParseIntError");
+        let out: ReturnType = syn::parse_str("-> Result<i64, String>").unwrap();
+        assert_eq!(result_error_name(&out), "String");
+    }
+
+    #[test]
+    fn classify_recognizes_result_option() {
+        let out: ReturnType = syn::parse_str("-> Result<Option<i64>, String>").unwrap();
+        assert!(classify_return(&out) == ReturnKind::ResultOption);
+        let out: ReturnType = syn::parse_str("-> Result<i64, String>").unwrap();
+        assert!(classify_return(&out) == ReturnKind::Result);
+    }
 }

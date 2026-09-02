@@ -11,8 +11,9 @@ use crate::Value;
 /// `BTreeMap`/`HashMap` keyed by `String`, `BTreeSet`/`HashSet`), `Option`,
 /// references, and `Box`. All integers encode to [`Value::Integer`] (an `i64`):
 /// values above `i64::MAX` (`u64`/`usize`) wrap, because the canonical lattice
-/// has a single signed-integer kind. `Some(v)` encodes as `v` and `None` as an
-/// empty string (see the [`Option`] impl for the ambiguity this carries).
+/// has a single signed-integer kind. `Some(v)` encodes as the tagged variant
+/// `Some(<v>)` and `None` as the payload-less variant `None` (see the [`Option`]
+/// impl).
 ///
 /// # Examples
 ///
@@ -146,17 +147,17 @@ impl<T: ToValue + Eq + std::hash::Hash, S: std::hash::BuildHasher> ToValue for H
 }
 
 impl<T: ToValue> ToValue for Option<T> {
-    /// `Some(v)` encodes as `v`; `None` encodes as an empty string.
+    /// `Some(v)` encodes as the tagged variant `Some(<v>)`; `None` as the
+    /// payload-less variant `None` (CTSC unit).
     ///
-    /// The empty-string sentinel for `None` is ambiguous with `Some("")` and
-    /// with any other value that encodes to `String("")`. Field emission avoids
-    /// this by representing an absent optional field as the *absence* of its
-    /// event rather than an empty value; this direct encoding is the fallback
-    /// for an `Option` used as a value.
+    /// The tagged-union encoding (CTSC trace §8.5) is unambiguous: `Some("")`
+    /// and `None` project to distinct [`Value::Variant`]s. An `Option` used as
+    /// an operation return is unwrapped by the completion mapping
+    /// (`Some`→result, `None`→empty) upstream of this impl.
     fn to_value(&self) -> Value {
         match self {
-            Some(v) => v.to_value(),
-            None => Value::String(String::new()),
+            Some(v) => Value::variant("Some", v.to_value()),
+            None => Value::variant_unit("None"),
         }
     }
 }
@@ -200,8 +201,11 @@ mod tests {
 
     #[test]
     fn options_and_references() {
-        assert_eq!(Some(4_i32).to_value(), Value::Integer(4));
-        assert_eq!(None::<i32>.to_value(), Value::String(String::new()));
+        assert_eq!(
+            Some(4_i32).to_value(),
+            Value::variant("Some", Value::Integer(4))
+        );
+        assert_eq!(None::<i32>.to_value(), Value::variant_unit("None"));
         assert_eq!(Box::new(6_i32).to_value(), Value::Integer(6));
     }
 

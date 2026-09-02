@@ -110,12 +110,20 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
 
 - **#2** ✅ — `runtime` pt1: `Value` (strict structural `Eq`/`Ord`, `Debug`) + `TraceEvent` + `ToValue`; #36 encoder edge tests. Dropped SpecGate's loose equality and hand-written serde (serialization deferred to the artifact-format item). ▪
 - **#3** — `runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, registry (`OpMeta`/`TypeMeta`/discovery), `SpecEvent`. **No serialization** (deferred to #11). ▪ ~400
-- **#4** ✅ — core annotations: `#[watch_operation]` + `#[watch_input]` + `watch_point!` + facade re-exports; per-parameter inputs, field-mutation echo, `$result` via `ReturnEmit`. Macro surface committed as `watch_*` (D1). ▪
+- **#4** ✅ — core annotations: `#[watch_operation]` + `#[watch_input]` + `watch_point!` + facade re-exports; per-parameter inputs, field-mutation echo, `$result` via `ReturnEmit` (retired in #37). Macro surface committed as `watch_*` (D1). ▪
 - **#29** — `#[derive(Watchable)]`: structural struct/enum emission (includes the Watchable merge). Unblocks the struct/enum outcome clauses. ▪
 - **#30** ✅ — `#[watch_dep]` dependency-boundary tracer: per-arg inputs + real-call `.response`/`.error`, optional `?`, `compile_error!` on unsupported shapes. Observation-only (substitution dropped → #27). ▪
 
 - **Emission contract ratified** ✅ — `docs/trace-contract.md` adopts CTSC 0.1 as Driftwatch's producer profile; D1–D5 resolved. Prereq for the emission items and the golden corpus.
-- **#37** — CTSC completion events: emit operation completion as `conformance.result`/`.empty`/`.error`/`.fault`, and dependencies as **nested `conformance.operation` spans** (own inputs + completion). Value carries via one `ReturnEmit` ladder (L1→L4-opaque). Retires the `Map` `{Ok|Err}`/`{Some|None}` tags and the bespoke `d.response`/`d.error` dep vocabulary. ⚠ ~350
+- **#37** ✅ — CTSC completion events: operation completion emits as
+  `conformance.result`/`.empty`/`.error`, and dependencies as **nested
+  `conformance.operation` spans** (own inputs + completion). Value carries via
+  one unified `ValueEmit` ladder (`runtime/src/value_emit.rs`) returning a
+  `Value`, shared by the result and error dispositions; `split_error`
+  maps a decomposed error to `error.name`/`error.value`. Folds in **#44**
+  (author-declared `component`) and **#45** (structural error decomposition).
+  Retires the flat `WatchEvent` path and the `Map` `{Ok|Err}`/`{Some|None}`
+  return tags. ▪
 - **#38** — dependency initializer shapes: `?` ✅; `.await`/async-dep support (needs an async operation + test executor); combinators stay `compile_error!`. ✚
 - **#39** — panic disposition: on a caught panic emit `conformance.fault` (+ partial trace, `ERROR` status), no result. ✚
 - **#40** — input surface: capture `&mut` non-receiver params as inputs (pre-call value) — supersedes #4's `&mut` exclusion; hidden inputs stay annotator-captured via `watch_point!`. Update `operation_params` goldens. ⚠

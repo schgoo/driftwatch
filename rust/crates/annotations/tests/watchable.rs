@@ -1,20 +1,13 @@
-//! `#[derive(Watchable)]` for structs and enums: `to_value` shapes,
-//! `emit_fields` events, and `TypeMeta`/`VariantMeta` discovery registration.
+//! `#[derive(Watchable)]` for structs and enums: `to_value` decomposition and
+//! `TypeMeta`/`VariantMeta` discovery registration.
 //!
-//! Unlike the other emission tests (which gate each `#[test]` with
-//! `#[cfg_attr(not(feature = "trace"), ignore)]` because `#[watch_operation]`
-//! expands to identity and the annotated function still exists off-trace),
 //! `#[derive(Watchable)]` off-trace emits **no impls at all**. Any body that
-//! calls `.to_value()`/`.emit_fields()` or names the `Watchable` trait cannot
-//! compile without `trace`, so the whole file is gated: it compiles empty
-//! (0 tests) under default features and runs fully under `--all-features`.
+//! calls `.to_value()` or names the discovery registry cannot compile without
+//! `trace`, so the whole file is gated: it compiles empty (0 tests) under
+//! default features and runs fully under `--all-features`.
 #![cfg(feature = "trace")]
 
-use annotations::__rt::Watchable as _;
-use annotations::{ToValue, Value, Watchable, reset, take_events};
-
-mod common;
-use common::ev;
+use annotations::{ToValue, Value, Watchable};
 use serde_json::json;
 
 #[derive(Watchable)]
@@ -69,18 +62,6 @@ fn struct_to_value_uses_only_tagged_fields_with_renames() {
 }
 
 #[test]
-fn struct_emit_fields_emits_tagged_fields() {
-    reset();
-    let u = User {
-        id: 7,
-        name: "ada".to_string(),
-        secret: "shh".to_string(),
-    };
-    u.emit_fields(None);
-    assert_eq!(take_events(), vec![ev("id", 7), ev("display", "ada")]);
-}
-
-#[test]
 fn enum_to_value_tags_each_variant_shape() {
     // Each variant projects to a `Value::Variant` (tagged union, CTSC 8.5): a
     // payload-less arm carries CTSC unit (an empty Map); a named arm carries a
@@ -96,19 +77,6 @@ fn enum_to_value_tags_each_variant_shape() {
     assert_eq!(
         Status::Wrapped(3).to_value(),
         Value::variant_unit("Wrapped")
-    );
-}
-
-#[test]
-fn enum_emit_fields_named_variant_emits_base_and_fields() {
-    reset();
-    Status::Named {
-        label: "x".to_string(),
-    }
-    .emit_fields(None);
-    assert_eq!(
-        take_events(),
-        vec![ev("status", "Named"), ev("status.label", "x")]
     );
 }
 

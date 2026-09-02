@@ -31,14 +31,16 @@ behavior — no hand-authored assertion to weaken.
 - One extraction per code version → two CTSC artifacts: a Registry (contract) and
   an OTLP Trace. CTSC Strict pairs operations by position; input-keyed matching is
   a possible future custom policy.
-- The synthetic return event is named `$result`, keeping the `$` sigil (decided
-  in #31). Params emit as `op.<name>`; the return emits a bare `$result`, so the
-  sigil reserves a namespace a user field/param named `result` cannot shadow,
-  and marks the event as compiler-synthesized. It is baked into the frozen
-  `runtime` crate (`return_emit.rs`) and echoed by `annotations-macros`
-  (`operation.rs`); do NOT rename it — that would edit frozen `runtime` and
-  churn trace canonicalization (the event-name vocabulary the trace-diff keys
-  on).
+- Operation completion is emitted as CTSC span events —
+  `conformance.result` (unwrapped success), `conformance.empty` (deliberate
+  absence, e.g. `None`), or `conformance.error` (structural decomposition:
+  `error.name` = variant tag or the last path segment of `E`; `error.value` =
+  payload or Display string) — completion is real span events, not a synthetic
+  result placeholder. Inputs are
+  one `conformance.operation.inputs` kvlist attribute keyed by bare identifier;
+  a `#[watch_dep]` is a nested `conformance.operation` span; `watch_point!` and
+  field mutations emit `conformance.observation` events. The flat `WatchEvent` /
+  `emit_*` / `take_events` path is retired.
 
 ## Decision boundaries (need a human owner)
 

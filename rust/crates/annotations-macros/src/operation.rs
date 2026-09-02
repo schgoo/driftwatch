@@ -1,11 +1,12 @@
-//! The `#[watch_operation]` attribute expansion.
+//! The `#[watch_operation(component = "...")]` attribute expansion.
 //!
-//! The operation name is the function name; the component is the annotated
-//! crate's package name (`CARGO_PKG_NAME`). Expansion emits a `Run` marker, one event per value
-//! parameter, instruments the body (field-mutation echo), emits `$result` after the body on every return path, and registers
-//! an [`OpMeta`](crate::shared) entry into the link-time registry. Unlike the
-//! `SpecGate` `#[spec_operation]` it lifts from, it takes no arguments (the
-//! `spec = "…"` component override is dropped).
+//! The operation name is the function name; the component is author-declared
+//! (mandatory) and supplies both the span's `conformance.component.id` and the
+//! registry `OpMeta.component`. Expansion opens a `conformance.operation` span
+//! (inputs as one kvlist attribute keyed by bare identifier), instruments the
+//! body (field-mutation → `conformance.observation`), pushes the completion
+//! event (`result`/`empty`/`error`) after the body on every return path, and
+//! registers an [`OpMeta`](crate::shared) entry into the link-time registry.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -15,11 +16,13 @@ use syn::{Block, Ident, ItemFn, ReturnType, Stmt, Type, parse_macro_input, parse
 
 use crate::body::BodyInstrumenter;
 use crate::shared::{
-    Param, ReturnKind, classify_return, component_tokens, extract_param_renames, has_receiver,
-    is_mut_ref, is_printable_param, param_name, rt,
+    OperationArgs, Param, ReturnKind, classify_return, extract_param_renames, has_receiver,
+    is_mut_ref, is_printable_param, param_name, result_error_name, rt,
 };
 
-pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr as OperationArgs);
+    let component = args.component;
     let mut func = parse_macro_input!(item as ItemFn);
 
     let op_name = func.sig.ident.to_string();
@@ -30,14 +33,14 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut visitor = BodyInstrumenter {
         param_names: param_names.clone(),
+        component: component.clone(),
     };
     visitor.visit_block_mut(&mut func.block);
     let body = &func.block;
 
-    let pre = build_pre_stmts(&op_name, &params);
-    // Post-body emission of `$result` (and, for struct returns, per-field
-    // events). Wrapping the body ensures the emission runs on EVERY return
-    // path, including early `return`s and `?` short-circuits.
+    let open = build_open(&op_name, &component, &params);
+    // Post-body completion event. Wrapping the body ensures the emission runs on
+    // EVERY return path, including early `return`s and `?` short-circuits.
     let post = build_post_emit(&func.sig.output);
     let new_body: Block = if let Some(post) = post {
         let ret_ty = match &func.sig.output {
@@ -46,7 +49,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
         };
         if is_async {
             parse_quote!({
-                #(#pre)*
+                #(#open)*
                 #[allow(clippy::redundant_closure_call, reason = "uniform body wrapper for return-path emission")]
                 let __dw_ret = (async move #body).await;
                 #post
@@ -54,7 +57,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
             })
         } else {
             parse_quote!({
-                #(#pre)*
+                #(#open)*
                 #[allow(clippy::redundant_closure_call, reason = "uniform body wrapper for return-path emission")]
                 let __dw_ret = (move || -> #ret_ty #body)();
                 #post
@@ -63,13 +66,13 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     } else {
         parse_quote!({
-            #(#pre)*
+            #(#open)*
             #body
         })
     };
     *func.block = new_body;
 
-    let registration = build_registration(&func, &op_name, is_async, &params);
+    let registration = build_registration(&func, &op_name, is_async, &component, &params);
 
     quote! {
         #func
@@ -78,36 +81,40 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Pre-body statements: the `Run` marker plus one `op.<name>` event per value
-/// parameter. Receivers and `&mut T` parameters are excluded (receivers are not
-/// in `params`; mutable refs are state, not inputs).
-fn build_pre_stmts(op_name: &str, params: &[Param]) -> Vec<Stmt> {
+/// Open the operation span: build the `conformance.operation.inputs` kvlist
+/// (bare-identifier keys; receivers and `&mut T` parameters excluded) and bind a
+/// span guard that lives to the end of the wrapped body.
+fn build_open(op_name: &str, component: &str, params: &[Param]) -> Vec<Stmt> {
     let rt = rt();
-    let mut out: Vec<Stmt> = vec![parse_quote!(#rt::emit_run(#op_name);)];
+    let mut inserts: Vec<TokenStream2> = Vec::new();
     for p in params {
         if is_mut_ref(&p.ty) {
             continue;
         }
         let name = param_name(p);
-        let event_name = format!("{op_name}.{name}");
         let id = &p.ident;
-        out.push(parse_quote!(
-            #rt::emit_event_v(#event_name, #rt::ToValue::to_value(&#id));
-        ));
+        inserts.push(quote! {
+            __dw_inputs.insert(#name.to_string(), #rt::ToValue::to_value(&#id));
+        });
     }
-    out
+    let block: Block = parse_quote!({
+        let mut __dw_inputs = ::std::collections::BTreeMap::new();
+        #(#inserts)*
+        let _dw_op = #rt::open_operation(#op_name, #component, __dw_inputs);
+    });
+    block.stmts
 }
 
-/// Build the post-body `$result`/field emission for an operation.
+/// Build the post-body completion event for an operation.
 ///
-/// Returns `None` for a unit/`()` return. Otherwise emits, from the captured
-/// `__dw_ret`:
-/// - `Result<T, E>` → a tagged `{Ok|Err}` map `$result`.
-/// - `Option<T>`    → a tagged `{Some|None}` map `$result`.
-/// - a printable scalar → a `Display`-string `$result`.
-/// - anything else  → the `ReturnEmit` autoref ladder (per-field events + a
-///   structured `$result` for struct returns; a structured `$result` for
-///   enums/collections; a `Display` `$result` as a last resort).
+/// Returns `None` for a unit/`()` return (no completion event). Otherwise, from
+/// the captured `__dw_ret`:
+/// - `Result<T, E>` → `result` (Ok, unwrapped) / `error` (Err, decomposed).
+/// - `Result<Option<T>, E>` → `result` (Ok(Some)) / `empty` (Ok(None)) /
+///   `error` (Err).
+/// - `Option<T>` → `result` (Some) / `empty` (None).
+/// - a printable scalar → a direct `result`.
+/// - anything else → the `ValueEmit` autoref ladder (one structured `result`).
 fn build_post_emit(output: &ReturnType) -> Option<TokenStream2> {
     let rt = rt();
     let ty = match output {
@@ -119,49 +126,56 @@ fn build_post_emit(output: &ReturnType) -> Option<TokenStream2> {
             t
         }
     };
+    let fallback = result_error_name(output);
+    let err_arm = quote! {
+        ::core::result::Result::Err(__dw_e) => {
+            use #rt::ValueEmitToValue as _;
+            use #rt::ValueEmitDisplay as _;
+            use #rt::ValueEmitDebug as _;
+            use #rt::ValueEmitUniversal as _;
+            let __dw_val = (&&&&#rt::ValueEmit(&__dw_e)).encode();
+            let (__dw_name, __dw_ev) = #rt::split_error(__dw_val, #fallback);
+            #rt::push_error(__dw_name, __dw_ev);
+        }
+    };
     Some(match classify_return(output) {
         ReturnKind::Unit => return None,
         ReturnKind::Result => quote! {
             match &__dw_ret {
-                ::core::result::Result::Ok(__dw_v) => {
-                    let mut __dw_m = ::std::collections::BTreeMap::new();
-                    __dw_m.insert("Ok".to_string(), #rt::ToValue::to_value(__dw_v));
-                    #rt::emit_event_v("$result", #rt::Value::Map(__dw_m));
+                ::core::result::Result::Ok(__dw_v) => #rt::push_result(#rt::ToValue::to_value(__dw_v)),
+                #err_arm
+            }
+        },
+        ReturnKind::ResultOption => quote! {
+            match &__dw_ret {
+                ::core::result::Result::Ok(::core::option::Option::Some(__dw_v)) => {
+                    #rt::push_result(#rt::ToValue::to_value(__dw_v));
                 }
-                ::core::result::Result::Err(__dw_e) => {
-                    let mut __dw_m = ::std::collections::BTreeMap::new();
-                    __dw_m.insert("Err".to_string(), #rt::Value::String(::std::format!("{}", __dw_e)));
-                    #rt::emit_event_v("$result", #rt::Value::Map(__dw_m));
-                }
+                ::core::result::Result::Ok(::core::option::Option::None) => #rt::push_empty(),
+                #err_arm
             }
         },
         ReturnKind::Option => quote! {
             match &__dw_ret {
                 ::core::option::Option::Some(__dw_v) => {
-                    let mut __dw_m = ::std::collections::BTreeMap::new();
-                    __dw_m.insert("Some".to_string(), #rt::ToValue::to_value(__dw_v));
-                    #rt::emit_event_v("$result", #rt::Value::Map(__dw_m));
+                    #rt::push_result(#rt::ToValue::to_value(__dw_v));
                 }
-                ::core::option::Option::None => {
-                    let mut __dw_m = ::std::collections::BTreeMap::new();
-                    __dw_m.insert("None".to_string(), #rt::Value::Map(::std::collections::BTreeMap::new()));
-                    #rt::emit_event_v("$result", #rt::Value::Map(__dw_m));
-                }
+                ::core::option::Option::None => #rt::push_empty(),
             }
         },
         ReturnKind::Other => {
             if is_printable_param(ty) {
                 quote! {
-                    #rt::emit_event_v("$result", #rt::ToValue::to_value(&__dw_ret));
+                    #rt::push_result(#rt::ToValue::to_value(&__dw_ret));
                 }
             } else {
                 quote! {
                     {
-                        use #rt::ReturnEmitStruct as _;
-                        use #rt::ReturnEmitToValue as _;
-                        use #rt::ReturnEmitDisplay as _;
-                        use #rt::ReturnEmitNone as _;
-                        (&&&&#rt::ReturnEmit(&__dw_ret)).emit_result();
+                        use #rt::ValueEmitToValue as _;
+                        use #rt::ValueEmitDisplay as _;
+                        use #rt::ValueEmitDebug as _;
+                        use #rt::ValueEmitUniversal as _;
+                        #rt::push_result((&&&&#rt::ValueEmit(&__dw_ret)).encode());
                     }
                 }
             }
@@ -175,10 +189,10 @@ fn build_registration(
     func: &ItemFn,
     op_name: &str,
     is_async: bool,
+    component: &str,
     params: &[Param],
 ) -> TokenStream2 {
     let rt = rt();
-    let component = component_tokens();
     let fn_name = func.sig.ident.to_string();
     let const_ident = Ident::new(
         &format!("_DRIFTWATCH_REG_{}", fn_name.to_uppercase()),

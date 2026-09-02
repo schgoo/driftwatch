@@ -1,20 +1,19 @@
-//! `#[watch_operation]` parameter (input) emission.
+//! `#[watch_operation]` input emission as the `conformance.operation.inputs`
+//! kvlist attribute.
 //!
-//! Feature-matrix coverage: which parameters emit an `op.<name>` input event.
-//! - value params → one event each;
-//! - `#[watch_input("name")]` → renames the emitted event;
+//! Feature-matrix coverage: which parameters appear in the inputs kvlist.
+//! - value params → one entry each, keyed by bare identifier;
+//! - `#[watch_input("name")]` → renames the key;
 //! - `&mut T` params → EXCLUDED (threaded state, not an input);
-//! - `&T` shared-ref params → INCLUDED, emitting the referent's value (locked by
-//!   observation of `build_pre_stmts`/`is_mut_ref`/`is_printable_param`);
-//! - the `self` receiver → EXCLUDED (a method with one value param emits no
-//!   receiver event).
+//! - `&T` shared-ref params → INCLUDED, carrying the referent's value;
+//! - the `self` receiver → EXCLUDED.
 
 mod common;
 
-use annotations::{reset, take_events, watch_operation};
-use common::{ev, run};
+use annotations::{SpanName, Value, reset, take_spans, watch_operation};
+use common::{op_attrs, result};
 
-#[watch_operation]
+#[watch_operation(component = "annotations")]
 fn scaled(n: i64, factor: i64) -> i64 {
     n * factor
 }
@@ -26,12 +25,12 @@ fn scaled(n: i64, factor: i64) -> i64 {
         reason = "identity (trace-off) form borrows `name`; the shape exercises a renamed String param"
     )
 )]
-#[watch_operation]
+#[watch_operation(component = "annotations")]
 fn greet(#[watch_input("subject")] name: String) -> String {
     format!("hi {name}")
 }
 
-#[watch_operation]
+#[watch_operation(component = "annotations")]
 fn accumulate(total: &mut i64, delta: i64) {
     *total += delta;
 }
@@ -43,7 +42,7 @@ fn accumulate(total: &mut i64, delta: i64) {
         reason = "the `&i64` shape is deliberate: it exercises shared-ref param emission"
     )
 )]
-#[watch_operation]
+#[watch_operation(component = "annotations")]
 fn observe(value: &i64) -> i64 {
     *value
 }
@@ -58,7 +57,7 @@ impl Widget {
             reason = "the receiver is deliberately unused: it exercises receiver exclusion"
         )
     )]
-    #[watch_operation]
+    #[watch_operation(component = "annotations")]
     fn resize(&self, width: i64) -> i64 {
         width
     }
@@ -66,73 +65,82 @@ impl Widget {
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn value_params_each_emit_one_event() {
+fn value_params_each_appear_in_the_inputs_kvlist() {
     reset();
     assert_eq!(scaled(3, 4), 12);
+    let spans = take_spans();
+    assert_eq!(spans[0].name, SpanName::Operation);
     assert_eq!(
-        take_events(),
-        vec![
-            run("scaled"),
-            ev("scaled.n", 3),
-            ev("scaled.factor", 4),
-            ev("$result", 12),
-        ]
+        spans[0].attributes,
+        op_attrs(
+            "annotations",
+            "scaled",
+            &[("n", Value::Integer(3)), ("factor", Value::Integer(4))]
+        )
     );
+    assert_eq!(spans[0].events, vec![result(12)]);
 }
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn watch_input_overrides_param_event_name() {
+fn watch_input_overrides_the_input_key() {
     reset();
     assert_eq!(greet("ada".to_string()), "hi ada");
+    let spans = take_spans();
     assert_eq!(
-        take_events(),
-        vec![
-            run("greet"),
-            ev("greet.subject", "ada"),
-            ev("$result", "hi ada"),
-        ]
+        spans[0].attributes,
+        op_attrs(
+            "annotations",
+            "greet",
+            &[("subject", Value::String("ada".into()))]
+        )
     );
+    assert_eq!(spans[0].events, vec![result("hi ada")]);
 }
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn mut_ref_param_is_excluded_from_input_emission() {
+fn mut_ref_param_is_excluded_from_inputs() {
     reset();
     let mut total = 10_i64;
     accumulate(&mut total, 5);
     assert_eq!(total, 15);
-    // `total: &mut i64` is state, not an input — only `delta` is echoed, and the
-    // unit return emits no `$result`.
+    // `total: &mut i64` is state, not an input — only `delta` appears, and the
+    // unit return emits no completion event.
+    let spans = take_spans();
     assert_eq!(
-        take_events(),
-        vec![run("accumulate"), ev("accumulate.delta", 5)]
+        spans[0].attributes,
+        op_attrs("annotations", "accumulate", &[("delta", Value::Integer(5))])
     );
+    assert_eq!(spans[0].events, vec![]);
 }
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn shared_ref_param_is_emitted_by_value() {
+fn shared_ref_param_is_included_by_value() {
     reset();
     let n = 7_i64;
     assert_eq!(observe(&n), 7);
-    // Observed behavior: a `&T` shared ref IS emitted, carrying the referent's
-    // value (not skipped like `&mut T`).
+    // A `&T` shared ref IS included, carrying the referent's value.
+    let spans = take_spans();
     assert_eq!(
-        take_events(),
-        vec![run("observe"), ev("observe.value", 7), ev("$result", 7),]
+        spans[0].attributes,
+        op_attrs("annotations", "observe", &[("value", Value::Integer(7))])
     );
+    assert_eq!(spans[0].events, vec![result(7)]);
 }
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn receiver_emits_no_event() {
+fn receiver_is_excluded_from_inputs() {
     reset();
     let w = Widget;
     assert_eq!(w.resize(64), 64);
-    // No event for `&self` — only the value param and the result.
+    // No entry for `&self` — only the value param.
+    let spans = take_spans();
     assert_eq!(
-        take_events(),
-        vec![run("resize"), ev("resize.width", 64), ev("$result", 64),]
+        spans[0].attributes,
+        op_attrs("annotations", "resize", &[("width", Value::Integer(64))])
     );
+    assert_eq!(spans[0].events, vec![result(64)]);
 }

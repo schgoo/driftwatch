@@ -2,10 +2,10 @@
 //!
 //! These macros are applied to a *target crate* while it runs under a Driftwatch
 //! snapshot: annotating its operations, state, and inline checkpoints makes the
-//! running code emit a [`WatchEvent`] stream into the runtime's thread-local
-//! buffer (drained via [`take_events`]), and registers the annotated operations
-//! and types into the link-time discovery registry. Annotated code never names
-//! the `runtime` or `linkme` crates directly — the macros funnel every reference
+//! running code emit a CTSC [`Span`] tree into the runtime's thread-local buffer
+//! (drained via [`take_spans`]), and registers the annotated operations and
+//! types into the link-time discovery registry. Annotated code never names the
+//! `runtime` or `linkme` crates directly — the macros funnel every reference
 //! through the hidden [`__rt`] re-export, so this facade is the single dependency
 //! a target crate adds.
 //!
@@ -18,7 +18,8 @@
 //! - Macros: [`watch_operation`], [`watch_dep`], [`watch_point`],
 //!   [`watch_input`], and the [`Watchable`](macro@Watchable) derive.
 //! - Runtime items users interact with directly: [`Value`], [`ToValue`],
-//!   [`WatchEvent`], [`take_events`], and [`reset`].
+//!   [`Span`], [`SpanEvent`], [`SpanName`], [`EventName`], [`take_spans`], and
+//!   [`reset`].
 //!
 //! # Production gating
 //!
@@ -30,7 +31,7 @@
 //! extraction driver does while taking a snapshot.
 
 pub use annotations_macros::{Watchable, watch_dep, watch_input, watch_operation, watch_point};
-pub use runtime::{ToValue, Value, WatchEvent, reset, take_events};
+pub use runtime::{EventName, Span, SpanEvent, SpanName, ToValue, Value, reset, take_spans};
 
 /// Hidden plumbing the generated macro code funnels through. Not part of the
 /// stable public API — user code should never name it directly.

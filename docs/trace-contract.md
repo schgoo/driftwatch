@@ -86,14 +86,23 @@ Tagged-union variant labels carry no type identity; that lives in the registry
    `conformance.operation` (own inputs + completion); there is no separate
    dependency event vocabulary.
 2. **Inputs are a span attribute**, not per-input events.
-3. **Declared-error mapping.** Each native error / declared exception maps
-   deterministically to a registry-declared `conformance.error.name`; an unmapped
+3. **Component is author-declared.** `conformance.component.id` is declared on
+   the annotation surface (`component = "…"`, **mandatory** on
+   `watch_operation`); it is language-agnostic (a Rust and a C# implementation of
+   the same component declare the same id). Observations inherit the enclosing
+   operation's component; a `watch_dep` inherits its enclosing operation's
+   component unless it declares an override, and grandchildren inherit the dep's
+   effective component.
+4. **Declared-error mapping.** Each native error / declared exception maps
+   deterministically to a `conformance.error.name` — the structural discriminant
+   (a `#[derive(Watchable)]` variant tag, else the error type's last path
+   segment) — with `conformance.error.value` the decomposed value; an unmapped
    failure is a `conformance.fault`.
-4. **NaN canonicalization.** Non-finite floats wire as OTLP `doubleValue` strings
+5. **NaN canonicalization.** Non-finite floats wire as OTLP `doubleValue` strings
    (`"NaN"`/`"Infinity"`/`"-Infinity"`, CTSC §8.4). OTLP does not preserve NaN
    payload bits, so the runtime normalizes every NaN to canonical `"NaN"` at the
    OTLP boundary — bitwise-distinct NaNs must not surface as false drift.
-5. **Feature gating.** When tracing is disabled (Rust: `trace` feature off; C#:
+6. **Feature gating.** When tracing is disabled (Rust: `trace` feature off; C#:
    build symbol), annotations expand to identity; a purpose-built OTLP recorder is
    used — no OpenTelemetry SDK dependency.
 

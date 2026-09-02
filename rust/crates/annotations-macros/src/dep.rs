@@ -1,13 +1,18 @@
-//! The `#[watch_dep("name")]` `let`-binding rewrite.
+//! The `#[watch_dep("name", component = "...")]` `let`-binding rewrite.
 //!
 //! Applied to a `let` inside a `#[watch_operation]` body; purely observational.
-//! For `let x = dep.call(a, &b)?;` it expands to:
+//! For `let x = dep.call(a, &b)?;` it expands to a **nested
+//! `conformance.operation` span**:
 //!
-//! - one `name.<arg>` input event per argument (by identifier, `&`/`&mut`
-//!   peeled; else positional `name.arg{i}`);
+//! - open a child span named `name` whose `conformance.operation.inputs` kvlist
+//!   carries one entry per argument (by identifier, `&`/`&mut` peeled; else
+//!   positional `arg{i}`); its `conformance.component.id` is the dep's declared
+//!   component else the enclosing operation's;
 //! - the original call, run verbatim and bound to a temp;
-//! - `name.response` (Ok) or `name.error` (Err `Display`), observed by borrow;
-//! - the original pattern and any trailing `?`, re-applied unchanged.
+//! - the child span's completion event — `result` (Ok, unwrapped) or `error`
+//!   (Err, decomposed like an operation's, with the fallback name `"error"`);
+//! - close the child span, then re-apply the original pattern and any trailing
+//!   `?`.
 //!
 //! The real call always runs and its `Result` binds unchanged: no table, no
 //! substitution. The `?` is observed before it unwraps, so an `Err` is recorded
@@ -20,28 +25,30 @@
 
 use syn::{Block, Expr, Local, Stmt, parse_quote};
 
-use crate::shared::{NameArg, rt};
+use crate::shared::{DepArgs, rt};
 
 /// Diagnostic emitted when `#[watch_dep]` is attached to an unsupported
 /// initializer shape.
 const UNSUPPORTED_SHAPE: &str = "#[watch_dep] expects a direct function or method call as the initializer (an optional trailing `?` is allowed); `.await`, chained calls, and other initializer shapes are not supported";
 
-/// If `attrs` carry a `#[watch_dep("name")]`, return the name.
-pub fn take_dep_name(attrs: &[syn::Attribute]) -> Option<String> {
+/// If `attrs` carry a `#[watch_dep("name", ...)]`, return the parsed args.
+pub fn take_dep_args(attrs: &[syn::Attribute]) -> Option<DepArgs> {
     for a in attrs {
         if a.path().is_ident("watch_dep")
-            && let Ok(NameArg(name)) = a.parse_args::<NameArg>()
+            && let Ok(args) = a.parse_args::<DepArgs>()
         {
-            return Some(name);
+            return Some(args);
         }
     }
     None
 }
 
-/// Expand a `#[watch_dep("name")]` `let` into per-argument input events plus
-/// response/error emission around the real call (trailing `?` preserved).
-/// `None` when there is no initializer, or it is not a call after peeling `?`.
-pub fn expand_dep_let(local: &Local, dep_name: &str) -> Option<Vec<Stmt>> {
+/// Expand a `#[watch_dep]` `let` into a nested `conformance.operation` span
+/// around the real call (trailing `?` preserved). `None` when there is no
+/// initializer, or it is not a call after peeling `?`. `parent_component` is the
+/// enclosing operation's effective component, inherited when the dep declares no
+/// override.
+pub fn expand_dep_let(local: &Local, args: &DepArgs, parent_component: &str) -> Option<Vec<Stmt>> {
     let init = local.init.as_ref()?;
 
     // Peel a trailing `?`; re-applied verbatim after observation.
@@ -53,36 +60,44 @@ pub fn expand_dep_let(local: &Local, dep_name: &str) -> Option<Vec<Stmt>> {
     let inputs = dep_inputs(inner)?;
     let rt = rt();
     let pat = &local.pat;
-    let response_name = format!("{dep_name}.response");
-    let error_name = format!("{dep_name}.error");
+    let dep_name = &args.name;
+    let dep_component: &str = args.component.as_deref().unwrap_or(parent_component);
 
-    let mut stmts: Vec<Stmt> = Vec::with_capacity(inputs.len() + 1);
-    for (name, expr) in &inputs {
-        let event_name = format!("{dep_name}.{name}");
-        stmts.push(parse_quote! {
-            #rt::emit_event_v(#event_name, #rt::ToValue::to_value(&(#expr)));
-        });
-    }
+    let input_inserts: Vec<proc_macro2::TokenStream> = inputs
+        .iter()
+        .map(|(name, expr)| {
+            quote::quote! {
+                __dw_inputs.insert(#name.to_string(), #rt::ToValue::to_value(&(#expr)));
+            }
+        })
+        .collect();
 
-    // Observe the `Result` by borrow, then apply the original binding and `?`.
+    // Observe the `Result` by borrow inside the child span, then close it and
+    // apply the original binding and `?`.
     let maybe_q: Option<syn::Token![?]> = is_try.then(|| parse_quote!(?));
     let call: Block = parse_quote!({
+        let mut __dw_inputs = ::std::collections::BTreeMap::new();
+        #(#input_inserts)*
+        let __dw_dep = #rt::open_operation(#dep_name, #dep_component, __dw_inputs);
         let __dw_res = (#inner);
         match &__dw_res {
             ::core::result::Result::Ok(__dw_v) => {
-                #rt::emit_event_v(#response_name, #rt::ToValue::to_value(__dw_v));
+                #rt::push_result(#rt::ToValue::to_value(__dw_v));
             }
             ::core::result::Result::Err(__dw_e) => {
-                #rt::emit_event_v(
-                    #error_name,
-                    #rt::Value::String(::std::format!("{}", __dw_e)),
-                );
+                use #rt::ValueEmitToValue as _;
+                use #rt::ValueEmitDisplay as _;
+                use #rt::ValueEmitDebug as _;
+                use #rt::ValueEmitUniversal as _;
+                let __dw_val = (&&&&#rt::ValueEmit(&__dw_e)).encode();
+                let (__dw_n, __dw_ev) = #rt::split_error(__dw_val, "error");
+                #rt::push_error(__dw_n, __dw_ev);
             }
         };
+        ::core::mem::drop(__dw_dep);
         let #pat = __dw_res #maybe_q;
     });
-    stmts.extend(call.stmts);
-    Some(stmts)
+    Some(call.stmts)
 }
 
 /// Each call argument paired with its event-name suffix. `None` when the
@@ -116,12 +131,13 @@ fn arg_name(i: usize, a: &Expr) -> String {
 
 /// Rewrite a `#[watch_dep]`-tagged `let`: expanded statements on success;
 /// unsupported shapes strip the attribute and prepend a `compile_error!`.
-/// Untagged `let`s pass through unchanged.
-pub fn rewrite_local(local: Local) -> Vec<Stmt> {
-    let Some(name) = take_dep_name(&local.attrs) else {
+/// Untagged `let`s pass through unchanged. `parent_component` is the enclosing
+/// operation's effective component.
+pub fn rewrite_local(local: Local, parent_component: &str) -> Vec<Stmt> {
+    let Some(args) = take_dep_args(&local.attrs) else {
         return vec![Stmt::Local(local)];
     };
-    if let Some(stmts) = expand_dep_let(&local, &name) {
+    if let Some(stmts) = expand_dep_let(&local, &args, parent_component) {
         return stmts;
     }
     let mut stripped = local;
