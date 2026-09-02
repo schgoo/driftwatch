@@ -1,7 +1,8 @@
 //! `watch_point!("name", &expr)` — an inline checkpoint.
 //!
-//! Emits one event named `"name"` carrying `expr`'s value (via [`ToValue`]),
-//! usable anywhere inside an annotated body.
+//! Emits one `conformance.observation` event named `"name"` carrying `expr`'s
+//! value (via [`ToValue`]) on the current operation span. A bare `watch_point!`
+//! outside any operation emits nothing.
 //!
 //! [`ToValue`]: runtime::ToValue
 
@@ -31,7 +32,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
     let PointCall { name, expr } = parse_macro_input!(input as PointCall);
     let rt = rt();
     quote_spanned! { name.span() =>
-        #rt::emit_event_v(#name, #rt::ToValue::to_value(&#expr))
+        #rt::push_observation(#name, #rt::ToValue::to_value(&#expr))
     }
     .into()
 }

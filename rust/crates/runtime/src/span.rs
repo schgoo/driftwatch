@@ -7,8 +7,15 @@
 //! stack so nested [`open_span`] calls link to their parent.
 //!
 //! This module builds the in-memory span tree only; serializing it to OTLP is
-//! the responsibility of a separate layer. It is independent of the flat
-//! [`crate::emit_event`] / [`crate::WatchEvent`] event path.
+//! the responsibility of a separate layer.
+//!
+//! # CTSC attribute keys
+//!
+//! The fully-qualified `conformance.*` attribute-key strings live in exactly
+//! one place: the convenience helpers ([`open_operation`], [`push_observation`],
+//! [`push_result`], [`push_empty`], [`push_error`]). Macro-generated code calls
+//! those helpers rather than spelling the keys inline, so the wire vocabulary is
+//! owned here.
 //!
 //! # Ids and timestamps
 //!
@@ -23,7 +30,7 @@
 //!
 //! # Threading contract
 //!
-//! Like [`crate::take_events`], the buffer and stack are thread-local, and
+//! The buffer and stack are thread-local, and
 //! #37a is single-threaded: spans are opened and closed on one thread. Linking
 //! spans opened on a spawned thread back to a parent (cross-thread propagation
 //! for parallel branches) is tracked in #42.
@@ -113,8 +120,7 @@ pub struct SpanEvent {
 ///
 /// Ids and tick timestamps are deterministic and used for nesting/order only;
 /// they are never compared across runs (see the module docs). The `Debug`
-/// output is a trust-anchor oracle, and equality is strict and structural
-/// (matching [`crate::WatchEvent`]).
+/// output is a trust-anchor oracle, and equality is strict and structural.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[expect(
     clippy::exhaustive_structs,
@@ -248,11 +254,67 @@ pub fn open_span(name: SpanName, attributes: BTreeMap<String, Value>) -> SpanGua
     }
 }
 
+/// Open a `conformance.operation` span with the three CTSC MUST attributes
+/// (`conformance.component.id`, `conformance.operation.name`,
+/// `conformance.operation.inputs`).
+#[must_use = "dropping the guard immediately closes the span with no body"]
+pub fn open_operation(name: &str, component: &str, inputs: BTreeMap<String, Value>) -> SpanGuard {
+    let mut attrs = BTreeMap::new();
+    attrs.insert(
+        "conformance.component.id".to_string(),
+        Value::String(component.to_string()),
+    );
+    attrs.insert(
+        "conformance.operation.name".to_string(),
+        Value::String(name.to_string()),
+    );
+    attrs.insert(
+        "conformance.operation.inputs".to_string(),
+        Value::Map(inputs),
+    );
+    open_span(SpanName::Operation, attrs)
+}
+
+/// Push a `conformance.observation` event (`observation.name` +
+/// `observation.value`) onto the current span.
+pub fn push_observation(name: &str, value: Value) {
+    let mut attrs = BTreeMap::new();
+    attrs.insert(
+        "conformance.observation.name".to_string(),
+        Value::String(name.to_string()),
+    );
+    attrs.insert("conformance.observation.value".to_string(), value);
+    push_event(EventName::Observation, attrs);
+}
+
+/// Push a `conformance.result` completion event (`result.value`) onto the
+/// current span.
+pub fn push_result(value: Value) {
+    let mut attrs = BTreeMap::new();
+    attrs.insert("conformance.result.value".to_string(), value);
+    push_event(EventName::Result, attrs);
+}
+
+/// Push a `conformance.empty` completion event (deliberate absence, no value
+/// attribute) onto the current span.
+pub fn push_empty() {
+    push_event(EventName::Empty, BTreeMap::new());
+}
+
+/// Push a `conformance.error` completion event (`error.name` + `error.value`)
+/// onto the current span.
+pub fn push_error(name: String, value: Value) {
+    let mut attrs = BTreeMap::new();
+    attrs.insert("conformance.error.name".to_string(), Value::String(name));
+    attrs.insert("conformance.error.value".to_string(), value);
+    push_event(EventName::Error, attrs);
+}
+
 /// Append a [`SpanEvent`] to the current (stack-top) span, in emission order.
 ///
-/// If no span is open this is a caller error; mirroring the flat buffer's
-/// escape-hatch behavior (`buffer.rs`), the event is silently dropped rather
-/// than panicking, since a stray emission outside any span has nowhere to land.
+/// If no span is open this is a caller error; the event is silently dropped
+/// rather than panicking, since a stray emission outside any span has nowhere to
+/// land (a bare `watch_point!` outside an operation emits nothing).
 pub fn push_event(name: EventName, attributes: BTreeMap<String, Value>) {
     let Some(index) = STACK.with(|s| s.borrow().last().map(|f| f.buffer_index)) else {
         return;
@@ -265,18 +327,15 @@ pub fn push_event(name: EventName, attributes: BTreeMap<String, Value>) {
 }
 
 /// Drain and return all buffered spans for the current thread, leaving the
-/// buffer empty (parallels [`crate::take_events`]).
+/// buffer empty.
 #[must_use]
 pub fn take_spans() -> Vec<Span> {
     SPANS.with(|b| std::mem::take(&mut *b.borrow_mut()))
 }
 
 /// Clear the thread-local span buffer, current-span stack, and counters, and
-/// mint a fresh `trace_id` for the next capture (parallels [`crate::reset`]).
-#[allow(
-    dead_code,
-    reason = "additive span-buffer reset; wired into the macro path by slice #37b"
-)]
+/// mint a fresh `trace_id` for the next capture. Called between operations so
+/// captures do not leak into one another.
 pub fn reset() {
     SPANS.with(|b| b.borrow_mut().clear());
     STACK.with(|s| s.borrow_mut().clear());

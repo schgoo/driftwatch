@@ -18,6 +18,10 @@ use crate::shared::rt;
 pub struct BodyInstrumenter {
     /// The value-parameter names whose field mutations are echoed.
     pub param_names: Vec<String>,
+    /// The enclosing operation's declared component, threaded into each
+    /// `#[watch_dep]` so a nested-operation span that omits its own `component`
+    /// inherits the parent's.
+    pub component: String,
 }
 
 impl VisitMut for BodyInstrumenter {
@@ -36,7 +40,7 @@ impl VisitMut for BodyInstrumenter {
 
         for stmt in original {
             match stmt {
-                Stmt::Local(local) => new.extend(rewrite_local(local)),
+                Stmt::Local(local) => new.extend(rewrite_local(local, &self.component)),
                 stmt => {
                     let emit_after = field_mutation_emit(&stmt, &self.param_names);
                     new.push(stmt);
@@ -106,7 +110,7 @@ fn field_emit_from_lhs(lhs: &Expr, param_names: &[String]) -> Option<Stmt> {
     };
     let rt = rt();
     let stmt: Stmt = parse_quote! {
-        #rt::emit_event_v(#event_name, #rt::ToValue::to_value(&(#lhs)));
+        #rt::push_observation(#event_name, #rt::ToValue::to_value(&(#lhs)));
     };
     Some(stmt)
 }

@@ -1,10 +1,10 @@
 //! Shared helpers for the annotation integration tests.
 //!
-//! `ev`/`run` build the two [`WatchEvent`] shapes the emission assertions
-//! compare against. `ev` takes `impl ToValue`, so tests pass raw values and let
-//! the conversion do the wrapping: integers (`ev("add.a", 2)`), strings
-//! (`ev("greet.subject", "ada")`), and collections (`ev("xs", vec![1, 2])`) all
-//! work directly, as do pre-built [`Value`]s (`Value: ToValue` is the identity).
+//! The builders construct the span-shaped pieces the emission assertions compare
+//! against: [`op_attrs`] builds a `conformance.operation` span's three
+//! attributes, and [`obs`]/[`result`]/[`empty`]/[`error`] build the completion
+//! and observation [`SpanEvent`]s. Tests compare against `take_spans()` and read
+//! `.name`/`.attributes`/`.events`; ids and ticks are never asserted.
 //!
 //! Not every test file uses every helper, so this module allows dead code.
 #![allow(
@@ -12,19 +12,72 @@
     reason = "shared across test binaries; not every binary uses every helper"
 )]
 
-use annotations::{ToValue, WatchEvent};
+use annotations::{EventName, SpanEvent, ToValue, Value};
+use std::collections::BTreeMap;
 
-/// A named [`WatchEvent::Event`] carrying `value`'s [`ToValue`] encoding.
-pub fn ev(name: &str, value: impl ToValue) -> WatchEvent {
-    WatchEvent::Event {
-        name: name.to_string(),
-        value: value.to_value(),
+/// The three `conformance.operation` span attributes: `component.id`,
+/// `operation.name`, and the `operation.inputs` kvlist.
+pub fn op_attrs(component: &str, name: &str, inputs: &[(&str, Value)]) -> BTreeMap<String, Value> {
+    let kv: BTreeMap<String, Value> = inputs
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), v.clone()))
+        .collect();
+    BTreeMap::from([
+        (
+            "conformance.component.id".to_string(),
+            Value::String(component.to_string()),
+        ),
+        (
+            "conformance.operation.name".to_string(),
+            Value::String(name.to_string()),
+        ),
+        ("conformance.operation.inputs".to_string(), Value::Map(kv)),
+    ])
+}
+
+/// A `conformance.observation` event (`observation.name` + `observation.value`).
+pub fn obs(name: &str, value: impl ToValue) -> SpanEvent {
+    SpanEvent {
+        name: EventName::Observation,
+        attributes: BTreeMap::from([
+            (
+                "conformance.observation.name".to_string(),
+                Value::String(name.to_string()),
+            ),
+            (
+                "conformance.observation.value".to_string(),
+                value.to_value(),
+            ),
+        ]),
     }
 }
 
-/// A [`WatchEvent::Run`] marker for the operation `name`.
-pub fn run(name: &str) -> WatchEvent {
-    WatchEvent::Run {
-        operation: name.to_string(),
+/// A `conformance.result` completion event (`result.value`).
+pub fn result(value: impl ToValue) -> SpanEvent {
+    SpanEvent {
+        name: EventName::Result,
+        attributes: BTreeMap::from([("conformance.result.value".to_string(), value.to_value())]),
+    }
+}
+
+/// A `conformance.empty` completion event (no value attribute).
+pub fn empty() -> SpanEvent {
+    SpanEvent {
+        name: EventName::Empty,
+        attributes: BTreeMap::new(),
+    }
+}
+
+/// A `conformance.error` completion event (`error.name` + `error.value`).
+pub fn error(name: &str, value: impl ToValue) -> SpanEvent {
+    SpanEvent {
+        name: EventName::Error,
+        attributes: BTreeMap::from([
+            (
+                "conformance.error.name".to_string(),
+                Value::String(name.to_string()),
+            ),
+            ("conformance.error.value".to_string(), value.to_value()),
+        ]),
     }
 }

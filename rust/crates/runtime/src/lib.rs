@@ -11,24 +11,27 @@
 //!
 //! # Key types
 //!
-//! - [`Value`] — the universal structured value: any scalar, or a
-//!   `list`/`map`/`set` of values. All integer widths canonicalize to `i64` and
-//!   all float widths to `f64`.
-//! - [`WatchEvent`] — one emitted record: a named [`WatchEvent::Event`] carrying
-//!   a value, or a [`WatchEvent::Run`] marking the start of an operation.
+//! - [`Value`] — the universal structured value: any scalar, a tagged
+//!   [`Value::Variant`], or a `list`/`map`/`set` of values. All integer widths
+//!   canonicalize to `i64` and all float widths to `f64`.
+//! - [`Span`] / [`SpanEvent`] — the OTLP-shaped CTSC span tree: a
+//!   `conformance.operation` span carrying ordered completion/observation
+//!   events (see [`span`]).
 //! - [`ToValue`] — converts an annotated Rust value into a [`Value`]; this is
 //!   the conversion the emit macros invoke.
 //!
 //! # Emission and discovery
 //!
-//! On top of the event types this crate provides the machinery the annotation
-//! macros expand into: a thread-local event buffer ([`emit_event`],
-//! [`emit_event_v`], [`emit_run`], [`take_events`], [`reset`]), the
-//! [`Watchable`] field-emission trait, the [`ReturnEmit`]
-//! autoref-specialization ladder for `$result`
-//! emission, and the link-time operation/type registry ([`OpMeta`] /
+//! On top of the value type this crate provides the machinery the annotation
+//! macros expand into: the thread-local span buffer and current-span stack
+//! ([`open_operation`], [`push_observation`], [`push_result`], [`push_empty`],
+//! [`push_error`], [`take_spans`], [`reset`]), the [`ValueEmit`]
+//! autoref-specialization ladder — the single value-encoding ladder shared by
+//! the `conformance.result` and `conformance.error` dispositions — plus
+//! [`split_error`] for the error name/value split, and the link-time
+//! operation/type registry ([`OpMeta`] /
 //! [`TypeMeta`] via [`discovery_json`]) the extraction driver reads to derive a
-//! contract. The buffer holds in-memory events only — persisting a capture is
+//! contract. The buffer holds in-memory spans only — persisting a capture is
 //! the artifact layer's job (see below).
 //!
 //! # Comparison
@@ -42,22 +45,22 @@
 //! identical observation and any inequality is a genuine difference — the
 //! property a drift check depends on.
 //!
-//! Equality and ordering are not decorative: [`WatchEvent`] compares by value,
-//! and the `Set` variant is stored in a `BTreeSet`, which requires `Value` to be
-//! totally ordered.
+//! Equality and ordering are not decorative: [`Span`]/[`SpanEvent`] compare by
+//! value, and the `Set` variant is stored in a `BTreeSet`, which requires
+//! `Value` to be totally ordered.
 //!
-//! This crate defines only the in-memory event types and their comparison; it
-//! does not serialize them. Persisting a capture to a file is the artifact
-//! layer''s job, and its format must round-trip these values faithfully —
+//! This crate defines only the in-memory span/value types and their comparison;
+//! it does not serialize them. Persisting a capture to a file is the artifact
+//! layer's job, and its format must round-trip these values faithfully —
 //! notably preserving `Set` vs `List` and the float edge cases — so that a
 //! re-read capture compares identically to the original. Relaxed, field-scoped
 //! matching for nondeterministic data (timestamps, random ids) likewise belongs
-//! in the comparison layer above this crate, never in `Value`''s own equality.
+//! in the comparison layer above this crate, never in `Value`'s own equality.
 //!
 //! # Examples
 //!
 //! ```
-//! use runtime::{ToValue, Value, WatchEvent};
+//! use runtime::{ToValue, Value};
 //!
 //! // Convert a Rust value into the canonical value...
 //! assert_eq!(
@@ -65,34 +68,28 @@
 //!     Value::List(vec![Value::Integer(1), Value::Integer(2)])
 //! );
 //!
-//! // ...and wrap it in an emitted event.
-//! let event = WatchEvent::Event { name: "$result".into(), value: 5_i32.to_value() };
-//! assert_eq!(event.name(), "$result");
+//! // ...an `Option` projects to a tagged union.
+//! assert_eq!(Some(5_i32).to_value(), Value::variant("Some", Value::Integer(5)));
 //! ```
 
-mod buffer;
 mod registry;
-mod return_emit;
 mod span;
 mod to_value;
 mod value;
-mod watch_event;
-mod watchable;
+mod value_emit;
 
-pub use buffer::{emit_event, emit_event_v, emit_run, reset, take_events};
 pub use registry::{
     DRIFTWATCH_OPS, DRIFTWATCH_TYPES, FieldMeta, OpMeta, TypeMeta, VariantMeta, discovery_json,
 };
-pub use return_emit::{
-    ReturnEmit, ReturnEmitDisplay, ReturnEmitNone, ReturnEmitStruct, ReturnEmitToValue,
-};
 pub use span::{
-    EventName, Span, SpanEvent, SpanGuard, SpanName, open_span, push_event, take_spans,
+    EventName, Span, SpanEvent, SpanGuard, SpanName, open_operation, open_span, push_empty,
+    push_error, push_event, push_observation, push_result, reset, take_spans,
 };
 pub use to_value::ToValue;
 pub use value::Value;
-pub use watch_event::WatchEvent;
-pub use watchable::{Watchable, WatchableStruct};
+pub use value_emit::{
+    ValueEmit, ValueEmitDebug, ValueEmitDisplay, ValueEmitToValue, ValueEmitUniversal, split_error,
+};
 
 /// Re-exported for macro-generated code, which references `linkme` paths when
 /// registering operations and types into the link-time registry.

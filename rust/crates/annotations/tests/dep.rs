@@ -1,118 +1,140 @@
-//! `#[watch_dep("name")]`: per-argument input events plus response/error
-//! emission around a real dependency call in a `#[watch_operation]` body.
+//! `#[watch_dep("name", component = "...")]`: a nested `conformance.operation`
+//! span (own inputs + completion) around a real dependency call inside a
+//! `#[watch_operation]` body.
 //!
 //! The observed call is `i64::from_str_radix` (an unannotated std function);
-//! each argument is emitted by identifier (`parse.text`) or positionally
-//! (`parse.arg1` for the `16` literal).
+//! each argument keys the child span's inputs by identifier (`text`) or
+//! positionally (`arg1` for the `16` literal).
 //!
 //! Coverage:
-//! - `Ok`: each input event then `name.response`;
-//! - `Err`: each input event then `name.error` (the callee's `Display`);
-//! - trailing `?`: `Result` observed before the `?` unwraps, then propagated;
-//! - the real call always runs, its `Result` binds unchanged.
+//! - `Ok`: child span carries a `conformance.result` (unwrapped);
+//! - `Err`: child span carries a `conformance.error` (fallback name `"error"`,
+//!   Display value — a dep does not see `E`'s type);
+//! - trailing `?`: the child span closes before the `?` unwraps, then the op
+//!   propagates;
+//! - component: a dep inherits the enclosing operation's component unless it
+//!   declares an override.
 
 mod common;
 
-use annotations::{Value, reset, take_events, watch_operation};
-use common::{ev, run};
+use annotations::{SpanName, Value, reset, take_spans, watch_operation};
+use common::{error, op_attrs, result};
 
-#[watch_operation]
+#[watch_operation(component = "annotations")]
 fn to_int(text: &str) -> i64 {
     #[watch_dep("parse")]
     let parsed = i64::from_str_radix(text, 16);
     parsed.unwrap_or(-1)
 }
 
-#[watch_operation]
+#[watch_operation(component = "annotations")]
 fn to_int_try(text: &str) -> Result<i64, std::num::ParseIntError> {
     #[watch_dep("parse")]
     let n = i64::from_str_radix(text, 16)?;
     Ok(n)
 }
 
+#[watch_operation(component = "annotations")]
+fn to_int_scoped(text: &str) -> i64 {
+    #[watch_dep("parse", component = "annotations.parse")]
+    let parsed = i64::from_str_radix(text, 16);
+    parsed.unwrap_or(-1)
+}
+
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn dep_ok_emits_each_input_then_response() {
+fn dep_opens_a_nested_span_linked_to_the_parent() {
     reset();
     assert_eq!(to_int("2a"), 42);
+    let spans = take_spans();
+    assert_eq!(spans.len(), 2);
+    let (parent, child) = (&spans[0], &spans[1]);
+    assert_eq!(parent.name, SpanName::Operation);
+    assert_eq!(child.name, SpanName::Operation);
+    assert_eq!(child.parent_span_id, Some(parent.span_id));
     assert_eq!(
-        take_events(),
-        vec![
-            run("to_int"),
-            ev("to_int.text", "2a"),
-            ev("parse.text", "2a"),
-            ev("parse.arg1", 16),
-            ev("parse.response", 42),
-            ev("$result", 42),
-        ]
+        parent.attributes,
+        op_attrs(
+            "annotations",
+            "to_int",
+            &[("text", Value::String("2a".into()))]
+        )
     );
+    // The dep inherits the parent component; args keyed by identifier / position.
+    assert_eq!(
+        child.attributes,
+        op_attrs(
+            "annotations",
+            "parse",
+            &[
+                ("text", Value::String("2a".into())),
+                ("arg1", Value::Integer(16)),
+            ]
+        )
+    );
+    assert_eq!(child.events, vec![result(42)]);
+    assert_eq!(parent.events, vec![result(42)]);
 }
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn dep_err_emits_each_input_then_error() {
+fn dep_err_records_error_on_the_child_span() {
     reset();
     assert_eq!(to_int("zz"), -1);
-    // Captured from the dependency itself so the assertion locks *what watch_dep
-    // emitted* without coupling to libstd's exact wording.
+    // Captured from the dependency itself so the assertion locks *what the dep
+    // recorded* without coupling to libstd's exact wording.
     let dep_err = i64::from_str_radix("zz", 16).unwrap_err().to_string();
-    assert_eq!(
-        take_events(),
-        vec![
-            run("to_int"),
-            ev("to_int.text", "zz"),
-            ev("parse.text", "zz"),
-            ev("parse.arg1", 16),
-            ev("parse.error", dep_err),
-            ev("$result", -1),
-        ]
-    );
+    let spans = take_spans();
+    let (parent, child) = (&spans[0], &spans[1]);
+    // A dep cannot see `E`'s type, so the error name is the fallback `"error"`.
+    assert_eq!(child.events, vec![error("error", dep_err)]);
+    // `to_int` returns the `unwrap_or(-1)` scalar.
+    assert_eq!(parent.events, vec![result(-1)]);
 }
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn dep_ok_try() {
+fn dep_ok_with_try_propagates_and_both_spans_carry_result() {
     reset();
     assert_eq!(to_int_try("2a"), Ok(42));
-    // The `Result` op emits `$result` as a tagged `Ok` map.
-    let mut ok = std::collections::BTreeMap::new();
-    ok.insert("Ok".to_string(), Value::Integer(42));
-    assert_eq!(
-        take_events(),
-        vec![
-            run("to_int_try"),
-            ev("to_int_try.text", "2a"),
-            ev("parse.text", "2a"),
-            ev("parse.arg1", 16),
-            ev("parse.response", 42),
-            ev("$result", Value::Map(ok)),
-        ]
-    );
+    let spans = take_spans();
+    let (parent, child) = (&spans[0], &spans[1]);
+    assert_eq!(child.events, vec![result(42)]);
+    assert_eq!(parent.events, vec![result(42)]);
 }
 
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
-fn dep_err_try() {
+fn dep_err_with_try_records_child_error_then_op_error() {
     reset();
-    // The `?` propagates the dependency's `Err`, so the op returns `Err`.
     to_int_try("zz").unwrap_err();
-    // Captured from the dependency itself so the assertion locks *what watch_dep
-    // emitted* without coupling to libstd's exact wording.
     let dep_err = i64::from_str_radix("zz", 16).unwrap_err().to_string();
-    // `watch_dep` emits `parse.error` before the `?` unwraps; the `?` then
-    // propagates the `Err` out of `to_int_try`, whose operation boundary still
-    // records the return as a tagged `Err` `$result` (verified empirically).
-    let mut err = std::collections::BTreeMap::new();
-    err.insert("Err".to_string(), Value::String(dep_err.clone()));
+    let spans = take_spans();
+    let (parent, child) = (&spans[0], &spans[1]);
+    // The child span records the dep's error (fallback name), then the `?`
+    // propagates and the op boundary records its own structural error, whose
+    // fallback name is the last segment of `E` (`ParseIntError`).
+    assert_eq!(child.events, vec![error("error", dep_err.clone())]);
+    assert_eq!(parent.events, vec![error("ParseIntError", dep_err)]);
+}
+
+#[test]
+#[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
+fn dep_component_override_scopes_the_child_span() {
+    reset();
+    assert_eq!(to_int_scoped("2a"), 42);
+    let spans = take_spans();
+    let child = &spans[1];
+    // The declared override wins over the inherited parent component.
     assert_eq!(
-        take_events(),
-        vec![
-            run("to_int_try"),
-            ev("to_int_try.text", "zz"),
-            ev("parse.text", "zz"),
-            ev("parse.arg1", 16),
-            ev("parse.error", dep_err),
-            ev("$result", Value::Map(err)),
-        ]
+        child.attributes,
+        op_attrs(
+            "annotations.parse",
+            "parse",
+            &[
+                ("text", Value::String("2a".into())),
+                ("arg1", Value::Integer(16)),
+            ]
+        )
     );
 }

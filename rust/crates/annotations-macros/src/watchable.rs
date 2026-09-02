@@ -1,21 +1,34 @@
 //! The `#[derive(Watchable)]` derive and its `#[watchable]` helper attribute.
 //!
-//! For a struct, emits [`Watchable`], [`ToValue`], and [`WatchableStruct`] impls
-//! plus a `TypeMeta` registration; only fields tagged `#[watchable]` (honoring
-//! `#[watchable(name = "…")]`) participate. For an enum, emits [`Watchable`] and
-//! [`ToValue`] impls that match each variant (unit/tuple emit just the variant
-//! tag; named variants emit their fields) plus one `VariantMeta` per variant.
+//! For a struct, emits a [`ToValue`] impl (a `Value::Map` of the
+//! `#[watchable]`-tagged fields, honoring `#[watchable(name = "…")]`) plus a
+//! `TypeMeta` registration. For an enum, emits a [`ToValue`] impl matching each
+//! variant (unit/tuple → `Value::variant_unit`; named → a `Value::Variant`
+//! carrying a field map) plus one `VariantMeta` per variant.
 //!
-//! [`Watchable`]: runtime::Watchable
+//! The derive produces value **decomposition** only — there is no per-field
+//! event emission. Field-mutation and inline observations are emitted directly
+//! by the operation body/`watch_point!` as `conformance.observation` events; a
+//! struct/enum return decomposes to a single `conformance.result` value via this
+//! `ToValue` impl (CTSC has no per-field return decomposition), and an error
+//! decomposes through the same impl in the `ValueEmit` ladder.
+//!
 //! [`ToValue`]: runtime::ToValue
-//! [`WatchableStruct`]: runtime::WatchableStruct
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{Attribute, Data, DeriveInput, Fields, Ident, LitStr, Meta, parse_macro_input};
 
-use crate::shared::{component_tokens, rt, sanitize_ident};
+use crate::shared::{rt, sanitize_ident};
+
+/// The `component` field's token for a derived type: the annotated crate's
+/// package name. The derive has no component surface, so a type inherits its
+/// crate name (extraction groups by component; cross-language normalization is
+/// the registry's job).
+fn component_tokens() -> TokenStream2 {
+    quote! { ::core::env!("CARGO_PKG_NAME") }
+}
 
 pub fn expand(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -28,8 +41,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
         return expand_enum(name, data_enum, &impl_g, &ty_g, where_c, &component, &rt);
     }
 
-    // --- Struct: emit each field tagged `#[watchable]` (opt-in). ---
-    let mut emits = Vec::new();
+    // --- Struct: decompose each field tagged `#[watchable]` (opt-in). ---
     let mut to_value_inserts = Vec::new();
     let mut field_metas: Vec<TokenStream2> = Vec::new();
     if let Data::Struct(s) = &input.data {
@@ -60,13 +72,6 @@ pub fn expand(input: TokenStream) -> TokenStream {
             to_value_inserts.push(quote! {
                 __dw_m.insert(#fname.to_string(), #rt::ToValue::to_value(&self.#id));
             });
-            emits.push(quote! {
-                let __dw_name = match __dw_prefix {
-                    ::std::option::Option::Some(p) => ::std::format!("{}.{}", p, #fname),
-                    ::std::option::Option::None => #fname.to_string(),
-                };
-                #rt::emit_event_v(&__dw_name, #rt::ToValue::to_value(&self.#id));
-            });
         }
     }
 
@@ -81,11 +86,6 @@ pub fn expand(input: TokenStream) -> TokenStream {
         &rt,
     );
     quote! {
-        impl #impl_g #rt::Watchable for #name #ty_g #where_c {
-            fn emit_fields(&self, __dw_prefix: ::std::option::Option<&str>) {
-                #(#emits)*
-            }
-        }
         impl #impl_g #rt::ToValue for #name #ty_g #where_c {
             fn to_value(&self) -> #rt::Value {
                 let mut __dw_m = ::std::collections::BTreeMap::new();
@@ -93,7 +93,6 @@ pub fn expand(input: TokenStream) -> TokenStream {
                 #rt::Value::Map(__dw_m)
             }
         }
-        impl #impl_g #rt::WatchableStruct for #name #ty_g #where_c {}
         #reg
     }
     .into()
@@ -122,9 +121,8 @@ fn watchable_field_name(attr: &Attribute) -> syn::Result<Option<String>> {
     })?;
     Ok(name)
 }
-/// The emit arm, `to_value` arm, and `VariantMeta` for one enum variant.
+/// The `to_value` arm and `VariantMeta` for one enum variant.
 struct VariantParts {
-    arm: TokenStream2,
     to_value_arm: TokenStream2,
     meta: TokenStream2,
 }
@@ -135,11 +133,6 @@ fn build_variant(name: &Ident, variant: &syn::Variant, rt: &TokenStream2) -> Var
     match &variant.fields {
         Fields::Unit => VariantParts {
             meta: quote! { #rt::VariantMeta { name: #vname_str, fields: &[] } },
-            arm: quote! {
-                #name::#vname => {
-                    #rt::emit_event_v(&__dw_base, #rt::Value::String(#vname_str.to_string()));
-                }
-            },
             to_value_arm: quote! {
                 #name::#vname => {
                     #rt::Value::variant_unit(#vname_str)
@@ -166,17 +159,6 @@ fn build_variant(name: &Ident, variant: &syn::Variant, rt: &TokenStream2) -> Var
                 .collect();
             VariantParts {
                 meta: quote! { #rt::VariantMeta { name: #vname_str, fields: &[#(#field_meta_entries),*] } },
-                arm: quote! {
-                    #name::#vname { #(#field_idents),* } => {
-                        #rt::emit_event_v(&__dw_base, #rt::Value::String(#vname_str.to_string()));
-                        #(
-                            #rt::emit_event_v(
-                                &::std::format!("{}.{}", __dw_base, #field_strs),
-                                #rt::ToValue::to_value(#field_idents),
-                            );
-                        )*
-                    }
-                },
                 to_value_arm: quote! {
                     #name::#vname { #(#field_idents),* } => {
                         let mut __dw_inner = ::std::collections::BTreeMap::new();
@@ -193,11 +175,6 @@ fn build_variant(name: &Ident, variant: &syn::Variant, rt: &TokenStream2) -> Var
         }
         Fields::Unnamed(_) => VariantParts {
             meta: quote! { #rt::VariantMeta { name: #vname_str, fields: &[] } },
-            arm: quote! {
-                #name::#vname(..) => {
-                    #rt::emit_event_v(&__dw_base, #rt::Value::String(#vname_str.to_string()));
-                }
-            },
             to_value_arm: quote! {
                 #name::#vname(..) => {
                     #rt::Value::variant_unit(#vname_str)
@@ -216,14 +193,11 @@ fn expand_enum(
     component: &TokenStream2,
     rt: &TokenStream2,
 ) -> TokenStream {
-    let enum_name_lower = name.to_string().to_lowercase();
-    let mut arms: Vec<TokenStream2> = Vec::new();
     let mut to_value_arms: Vec<TokenStream2> = Vec::new();
     let mut variant_metas: Vec<TokenStream2> = Vec::new();
 
     for variant in &data_enum.variants {
         let parts = build_variant(name, variant, rt);
-        arms.push(parts.arm);
         to_value_arms.push(parts.to_value_arm);
         variant_metas.push(parts.meta);
     }
@@ -239,17 +213,6 @@ fn expand_enum(
         rt,
     );
     quote! {
-        impl #impl_g #rt::Watchable for #name #ty_g #where_c {
-            fn emit_fields(&self, __dw_prefix: ::std::option::Option<&str>) {
-                let __dw_base: ::std::string::String = match __dw_prefix {
-                    ::std::option::Option::Some(p) => p.to_string(),
-                    ::std::option::Option::None => #enum_name_lower.to_string(),
-                };
-                match self {
-                    #(#arms)*
-                }
-            }
-        }
         impl #impl_g #rt::ToValue for #name #ty_g #where_c {
             fn to_value(&self) -> #rt::Value {
                 match self {
