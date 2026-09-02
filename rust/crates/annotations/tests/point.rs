@@ -32,4 +32,5 @@ fn checkpoint_outside_an_operation_emits_nothing() {
     let x = 7_i64;
     watch_point!("cp", &x);
     assert!(take_spans().is_empty());
+    assert_eq!(x, 7);
 }
