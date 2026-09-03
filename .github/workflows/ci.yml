@@ -47,6 +47,48 @@ jobs:
         if: success() || failure()
         working-directory: rust
         run: cargo fmt -- --check
+      - name: Install cargo-deny
+        if: (success() || failure()) && matrix.os == 'ubuntu-latest'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.19.0
+      - name: Deny
+        if: (success() || failure()) && matrix.os == 'ubuntu-latest'
+        working-directory: rust
+        run: cargo deny check licenses
       # `cargo evaluate` is an internal tool that is not available on hosted CI
       # runners, so it runs as the local pre-PR gate (`just check` / `just
       # evaluate`) rather than in CI.
+
+  # README freshness and workspace coverage. Both derive from the crate
+  # sources, so they run once on Linux; the `test` job already covers the
+  # cross-OS build/test/lint matrix.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96.0"
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Install cargo-doc2readme
+        run: cargo install cargo-doc2readme --locked
+      - name: README freshness
+        working-directory: rust
+        run: |
+          cargo doc2readme -p annotations --lib --template crates/README.j2 --out crates/annotations/README.md --check
+          cargo doc2readme -p annotations-macros --lib --template crates/README.j2 --out crates/annotations-macros/README.md --check
+          cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md --check
+          cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md --check
+          cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md --check
+          cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md --check
+      - name: Coverage
+        if: success() || failure()
+        working-directory: rust
+        run: cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 85
