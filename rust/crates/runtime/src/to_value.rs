@@ -173,6 +173,11 @@ impl<T: ToValue + ?Sized> ToValue for &T {
         (**self).to_value()
     }
 }
+impl<T: ToValue + ?Sized> ToValue for &mut T {
+    fn to_value(&self) -> Value {
+        (**self).to_value()
+    }
+}
 impl<T: ToValue + ?Sized> ToValue for Box<T> {
     fn to_value(&self) -> Value {
         (**self).to_value()
@@ -207,6 +212,13 @@ mod tests {
         );
         assert_eq!(None::<i32>.to_value(), Value::variant_unit("None"));
         assert_eq!(Box::new(6_i32).to_value(), Value::Integer(6));
+
+        // A `&mut T` encodes to the referent's value, mirroring `&T`. Bind the
+        // reference and call through `ToValue::to_value(&r)` (the codegen path)
+        // to exercise the `&mut T` impl.
+        let mut n = 8_i64;
+        let r: &mut i64 = &mut n;
+        assert_eq!(ToValue::to_value(&r), Value::Integer(8));
     }
 
     #[test]

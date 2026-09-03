@@ -17,7 +17,7 @@ use syn::{Block, Ident, ItemFn, ReturnType, Stmt, Type, parse_macro_input, parse
 use crate::body::BodyInstrumenter;
 use crate::shared::{
     OperationArgs, Param, ReturnKind, classify_return, extract_param_renames, has_receiver,
-    is_mut_ref, is_printable_param, param_name, result_error_name, rt,
+    is_printable_param, param_name, result_error_name, rt,
 };
 
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -82,15 +82,13 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Open the operation span: build the `conformance.operation.inputs` kvlist
-/// (bare-identifier keys; receivers and `&mut T` parameters excluded) and bind a
-/// span guard that lives to the end of the wrapped body.
+/// (bare-identifier keys; receivers excluded, but `&mut T` non-receiver params
+/// included by their pre-call value) and bind a span guard that lives to the end
+/// of the wrapped body.
 fn build_open(op_name: &str, component: &str, params: &[Param]) -> Vec<Stmt> {
     let rt = rt();
     let mut inserts: Vec<TokenStream2> = Vec::new();
     for p in params {
-        if is_mut_ref(&p.ty) {
-            continue;
-        }
         let name = param_name(p);
         let id = &p.ident;
         inserts.push(quote! {

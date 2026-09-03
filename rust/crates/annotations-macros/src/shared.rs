@@ -219,13 +219,6 @@ fn is_owned_primitive(ty: &Type) -> bool {
     false
 }
 
-/// True for `&mut T` parameters. These represent mutable state objects threaded
-/// through an operation (their mutations are captured separately), not value
-/// inputs — so they are excluded from input-echo emission.
-pub fn is_mut_ref(ty: &Type) -> bool {
-    matches!(ty, Type::Reference(r) if r.mutability.is_some())
-}
-
 /// True for owned primitives and shared references to primitives (notably
 /// `&str`) — the printed value goes through `format!("{}", x)`.
 pub fn is_printable_param(ty: &Type) -> bool {

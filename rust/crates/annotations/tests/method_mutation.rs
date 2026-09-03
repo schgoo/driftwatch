@@ -6,12 +6,13 @@
 //! - `&mut self` with `self.field = …` → an observation named `field`;
 //! - a compound `self.field += …` → likewise observed;
 //! - `param.field = …` on a `&mut SomeStruct` param → an observation named
-//!   `param.field` (the `&mut` param is excluded from the inputs kvlist, but its
-//!   field mutations are still tracked because it is a named parameter).
+//!   `param.field` (the `&mut` param is captured as a pre-call input by value,
+//!   and its field mutations are additionally tracked because it is a named
+//!   parameter).
 
 mod common;
 
-use annotations::{Value, reset, take_spans, watch_operation};
+use annotations::{Value, Watchable, reset, take_spans, watch_operation};
 use common::{obs, op_attrs};
 
 struct Counter {
@@ -27,7 +28,9 @@ impl Counter {
     }
 }
 
+#[derive(Watchable)]
 struct Config {
+    #[watchable]
     level: i64,
 }
 
@@ -63,11 +66,25 @@ fn mut_ref_param_field_mutation_is_observed_as_param_dot_field() {
     configure(&mut cfg, 9);
     assert_eq!(cfg.level, 9);
     let spans = take_spans();
-    // `cfg: &mut Config` is excluded from the inputs kvlist, but its field
-    // mutation is observed as `cfg.level`; the value param `level` is an input.
+    // `cfg: &mut Config` is captured by its pre-call structural value
+    // (`{"level": 0}`) at span open, and its field mutation is observed as
+    // `cfg.level`; the value param `level` is also an input.
     assert_eq!(
         spans[0].attributes,
-        op_attrs("annotations", "configure", &[("level", Value::Integer(9))])
+        op_attrs(
+            "annotations",
+            "configure",
+            &[
+                (
+                    "cfg",
+                    Value::Map(std::collections::BTreeMap::from([(
+                        "level".to_string(),
+                        Value::Integer(0)
+                    )]))
+                ),
+                ("level", Value::Integer(9))
+            ]
+        )
     );
     assert_eq!(spans[0].events, vec![obs("cfg.level", 9)]);
 }
