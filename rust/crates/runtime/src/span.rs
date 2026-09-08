@@ -13,9 +13,9 @@
 //!
 //! The fully-qualified `conformance.*` attribute-key strings live in exactly
 //! one place: the convenience helpers ([`open_operation`], [`push_observation`],
-//! [`push_result`], [`push_empty`], [`push_error`]). Macro-generated code calls
-//! those helpers rather than spelling the keys inline, so the wire vocabulary is
-//! owned here.
+//! [`push_result`], [`push_empty`], [`push_error`], [`push_fault`]). Macro-generated
+//! code calls those helpers rather than spelling the keys inline, so the wire
+//! vocabulary is owned here.
 //!
 //! # Ids and timestamps
 //!
@@ -103,6 +103,25 @@ impl EventName {
     }
 }
 
+/// The CTSC span status, mapping 1:1 to the OTLP `StatusCode` vocabulary.
+///
+/// A span opens `Unset` and stays there on success (setting `Ok` is deferred to
+/// #11). The panic-disposition path sets `Error` alongside the
+/// `conformance.fault` event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "the closed OTLP StatusCode vocabulary; adding a status is a deliberate format change that must be handled everywhere"
+)]
+pub enum SpanStatus {
+    /// The default at span open (OTLP `STATUS_CODE_UNSET` = 0).
+    Unset,
+    /// A deliberately-recorded success (OTLP `STATUS_CODE_OK` = 1).
+    Ok,
+    /// A recorded failure, e.g. a propagating panic (OTLP `STATUS_CODE_ERROR` = 2).
+    Error,
+}
+
 /// One event recorded on a span, in emission order (CTSC trace §7.7).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[expect(
@@ -140,6 +159,8 @@ pub struct Span {
     pub start: u64,
     /// Monotonic close tick, set on `SpanGuard` drop. Ordering only.
     pub end: Option<u64>,
+    /// The span's OTLP status. `Unset` at open; the fault path sets `Error`.
+    pub status: SpanStatus,
     /// The span's attributes (e.g. `conformance.operation.inputs`).
     pub attributes: BTreeMap<String, Value>,
     /// The span's events, in emission order.
@@ -235,6 +256,7 @@ pub fn open_span(name: SpanName, attributes: BTreeMap<String, Value>) -> SpanGua
         name,
         start,
         end: None,
+        status: SpanStatus::Unset,
         attributes,
         events: Vec::new(),
     };
@@ -308,6 +330,41 @@ pub fn push_error(name: String, value: Value) {
     attrs.insert("conformance.error.name".to_string(), Value::String(name));
     attrs.insert("conformance.error.value".to_string(), value);
     push_event(EventName::Error, attrs);
+}
+
+/// Push a `conformance.fault` event (`fault.observer` + `fault.message`) onto
+/// the current span, recording an unexpected failure (e.g. a Rust `panic!`).
+///
+/// The `observer` names who caught the fault (the producer choice is always
+/// `"target"`); the `message` is the raw, verbatim panic payload string. This
+/// helper owns the `conformance.fault.*` key strings so macro-generated code
+/// never spells them inline.
+pub fn push_fault(observer: &str, message: String) {
+    let mut attrs = BTreeMap::new();
+    attrs.insert(
+        "conformance.fault.observer".to_string(),
+        Value::String(observer.to_string()),
+    );
+    attrs.insert(
+        "conformance.fault.message".to_string(),
+        Value::String(message),
+    );
+    push_event(EventName::Fault, attrs);
+}
+
+/// Set the OTLP status of the current (stack-top) span.
+///
+/// Mirrors [`push_event`] in locating the stack-top span; a call outside any
+/// open span is a no-op (there is nowhere to record the status).
+pub fn set_status(status: SpanStatus) {
+    let Some(index) = STACK.with(|s| s.borrow().last().map(|f| f.buffer_index)) else {
+        return;
+    };
+    SPANS.with(|b| {
+        if let Some(span) = b.borrow_mut().get_mut(index) {
+            span.status = status;
+        }
+    });
 }
 
 /// Append a [`SpanEvent`] to the current (stack-top) span, in emission order.
@@ -507,5 +564,64 @@ mod tests {
         let debug = format!("{span:?}");
         assert!(debug.contains("Operation"));
         assert!(debug.contains("Result"));
+    }
+
+    #[test]
+    fn span_status_defaults_to_unset_and_set_status_writes_the_stack_top() {
+        reset();
+        let g = open_span(SpanName::Operation, BTreeMap::new());
+        set_status(SpanStatus::Error);
+        drop(g);
+        let spans = take_spans();
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].status, SpanStatus::Error);
+    }
+
+    #[test]
+    fn span_status_is_unset_when_untouched() {
+        reset();
+        drop(open_span(SpanName::Operation, BTreeMap::new()));
+        assert_eq!(take_spans()[0].status, SpanStatus::Unset);
+    }
+
+    #[test]
+    fn set_status_writes_only_the_current_stack_top() {
+        reset();
+        let outer = open_span(SpanName::Scenario, BTreeMap::new());
+        let inner = open_span(SpanName::Operation, BTreeMap::new());
+        set_status(SpanStatus::Error);
+        drop(inner);
+        // Outer is now the stack top and untouched, so it stays `Unset`.
+        drop(outer);
+        let spans = take_spans();
+        assert_eq!(spans[0].status, SpanStatus::Unset, "outer stays Unset");
+        assert_eq!(spans[1].status, SpanStatus::Error, "inner set to Error");
+    }
+
+    #[test]
+    fn set_status_outside_a_span_is_a_noop() {
+        reset();
+        set_status(SpanStatus::Error);
+        assert!(take_spans().is_empty());
+    }
+
+    #[test]
+    fn push_fault_owns_the_fault_keys() {
+        reset();
+        let g = open_span(SpanName::Operation, BTreeMap::new());
+        push_fault("target", "boom".to_string());
+        drop(g);
+        let spans = take_spans();
+        assert_eq!(spans[0].events.len(), 1);
+        let event = &spans[0].events[0];
+        assert_eq!(event.name, EventName::Fault);
+        assert_eq!(
+            event.attributes.get("conformance.fault.observer"),
+            Some(&Value::String("target".to_string()))
+        );
+        assert_eq!(
+            event.attributes.get("conformance.fault.message"),
+            Some(&Value::String("boom".to_string()))
+        );
     }
 }

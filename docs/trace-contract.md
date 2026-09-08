@@ -64,6 +64,11 @@ else positional); its receiver is excluded.
 Nested outcome types peel to their disposition — e.g. Rust `Result<Option<T>, E>`:
 `Ok(Some)`=result, `Ok(None)`=empty, `Err`=error.
 
+**Fault propagation.** A panic emits a `conformance.fault` at *every enclosing
+watched frame* (the operation and each enclosing dep), each with span
+`status = Error` and no completion event, then re-propagates; the comparator may
+collapse the cascade for reporting.
+
 ## Values
 
 Values are encoded per CTSC trace §8. Source-type resolution:

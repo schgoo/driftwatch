@@ -4,9 +4,11 @@
 //! (mandatory) and supplies both the span's `conformance.component.id` and the
 //! registry `OpMeta.component`. Expansion opens a `conformance.operation` span
 //! (inputs as one kvlist attribute keyed by bare identifier), instruments the
-//! body (field-mutation → `conformance.observation`), pushes the completion
-//! event (`result`/`empty`/`error`) after the body on every return path, and
-//! registers an [`OpMeta`](crate::shared) entry into the link-time registry.
+//! body (field-mutation → `conformance.observation`), runs it inside
+//! `catch_unwind` so a panic is dispositioned as a `conformance.fault` (status
+//! `Error`) and then re-propagated, pushes the completion event
+//! (`result`/`empty`/`error`) after the body on every non-panicking return path,
+//! and registers an [`OpMeta`](crate::shared) entry into the link-time registry.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -16,8 +18,8 @@ use syn::{Block, Ident, ItemFn, ReturnType, Stmt, Type, parse_macro_input, parse
 
 use crate::body::BodyInstrumenter;
 use crate::shared::{
-    OperationArgs, Param, ReturnKind, classify_return, extract_param_renames, has_receiver,
-    is_printable_param, param_name, result_error_name, rt,
+    OperationArgs, Param, ReturnKind, classify_return, extract_param_renames, fault_arm,
+    has_receiver, is_printable_param, param_name, result_error_name, rt,
 };
 
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -30,6 +32,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _is_method = has_receiver(&func);
     let params = extract_param_renames(&mut func);
     let param_names: Vec<String> = params.iter().map(|p| p.ident.to_string()).collect();
+    let rt = rt();
 
     let mut visitor = BodyInstrumenter {
         param_names: param_names.clone(),
@@ -39,35 +42,42 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let body = &func.block;
 
     let open = build_open(&op_name, &component, &params);
-    // Post-body completion event. Wrapping the body ensures the emission runs on
-    // EVERY return path, including early `return`s and `?` short-circuits.
+    // Wrap the body so a panic is dispositioned as a `conformance.fault`: the
+    // body runs inside `catch_unwind` (sync) / `catch_unwind_fut` (async); on
+    // `Ok` the completion event is emitted after the body on every return path,
+    // and on `Err` the fault is recorded and the panic re-propagates
+    // (`resume_unwind`) so behavior is unchanged for callers.
     let post = build_post_emit(&func.sig.output);
-    let new_body: Block = if let Some(post) = post {
-        let ret_ty = match &func.sig.output {
-            ReturnType::Type(_, ty) => ty.clone(),
-            ReturnType::Default => unreachable!("post-emit only built for a non-unit return"),
-        };
-        if is_async {
-            parse_quote!({
-                #(#open)*
-                #[allow(clippy::redundant_closure_call, reason = "uniform body wrapper for return-path emission")]
-                let __dw_ret = (async move #body).await;
-                #post
-                __dw_ret
-            })
-        } else {
-            parse_quote!({
-                #(#open)*
-                #[allow(clippy::redundant_closure_call, reason = "uniform body wrapper for return-path emission")]
-                let __dw_ret = (move || -> #ret_ty #body)();
-                #post
-                __dw_ret
-            })
-        }
+    let fault = build_fault_arm();
+    let ret_ty: Type = match &func.sig.output {
+        ReturnType::Type(_, ty) => (**ty).clone(),
+        ReturnType::Default => parse_quote!(()),
+    };
+    let new_body: Block = if is_async {
+        parse_quote!({
+            #(#open)*
+            let __dw_outcome = #rt::catch_unwind_fut(async move #body).await;
+            match __dw_outcome {
+                ::core::result::Result::Ok(__dw_ret) => {
+                    #post
+                    __dw_ret
+                }
+                ::core::result::Result::Err(__dw_payload) => #fault,
+            }
+        })
     } else {
         parse_quote!({
             #(#open)*
-            #body
+            let __dw_outcome = ::std::panic::catch_unwind(
+                ::std::panic::AssertUnwindSafe(move || -> #ret_ty #body),
+            );
+            match __dw_outcome {
+                ::core::result::Result::Ok(__dw_ret) => {
+                    #post
+                    __dw_ret
+                }
+                ::core::result::Result::Err(__dw_payload) => #fault,
+            }
         })
     };
     *func.block = new_body;
@@ -103,7 +113,14 @@ fn build_open(op_name: &str, component: &str, params: &[Param]) -> Vec<Stmt> {
     block.stmts
 }
 
-/// Build the post-body completion event for an operation.
+/// Build the panic-disposition arm for the sync and async operation wrappers.
+///
+/// Delegates to the shared [`fault_arm`](crate::shared::fault_arm) so the
+/// operation and dep paths share one message-extraction ladder and one
+/// fault-recording sequence.
+fn build_fault_arm() -> TokenStream2 {
+    fault_arm()
+}
 ///
 /// Returns `None` for a unit/`()` return (no completion event). Otherwise, from
 /// the captured `__dw_ret`:

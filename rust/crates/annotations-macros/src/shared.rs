@@ -273,6 +273,43 @@ pub fn param_name(p: &Param) -> String {
     p.rename.clone().unwrap_or_else(|| p.ident.to_string())
 }
 
+/// The panic-disposition Err-arm body shared by the operation wrapper
+/// ([`crate::operation`]) and the dep wrapper ([`crate::dep`]).
+///
+/// Given a caught panic payload bound in scope as `__dw_payload`
+/// (`Box<dyn Any + Send>`), this block:
+/// 1. extracts the raw message verbatim via the downcast ladder
+///    (`&str` → `String` → the fixed `"<non-string panic payload>"` marker);
+/// 2. sets the current (stack-top) span's status to `Error`;
+/// 3. records a `conformance.fault` observed by `"target"` carrying the message;
+/// 4. re-raises the panic with `resume_unwind`, so it propagates to (and faults)
+///    every enclosing watched frame — the ratified cascade.
+///
+/// The trailing `resume_unwind` diverges (`!`), so the block unifies with any
+/// surrounding expression's type. All `conformance.*` keys are owned by the
+/// runtime helpers reached through the `__rt` funnel; none are spelled here.
+pub fn fault_arm() -> TokenStream2 {
+    let rt = rt();
+    quote! {
+        {
+            let __dw_msg = if let ::core::option::Option::Some(__dw_s) =
+                __dw_payload.downcast_ref::<&str>()
+            {
+                ::std::string::ToString::to_string(*__dw_s)
+            } else if let ::core::option::Option::Some(__dw_s) =
+                __dw_payload.downcast_ref::<::std::string::String>()
+            {
+                ::std::clone::Clone::clone(__dw_s)
+            } else {
+                ::std::string::String::from("<non-string panic payload>")
+            };
+            #rt::set_status(#rt::SpanStatus::Error);
+            #rt::push_fault("target", __dw_msg);
+            ::std::panic::resume_unwind(__dw_payload)
+        }
+    }
+}
+
 /// Turn an arbitrary string into a valid uppercase identifier suffix.
 pub fn sanitize_ident(s: &str) -> String {
     s.chars()

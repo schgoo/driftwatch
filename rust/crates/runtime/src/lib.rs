@@ -72,18 +72,21 @@
 //! assert_eq!(Some(5_i32).to_value(), Value::variant("Some", Value::Integer(5)));
 //! ```
 
+mod panic;
 mod registry;
 mod span;
 mod to_value;
 mod value;
 mod value_emit;
 
+pub use panic::catch_unwind_fut;
 pub use registry::{
     DRIFTWATCH_OPS, DRIFTWATCH_TYPES, FieldMeta, OpMeta, TypeMeta, VariantMeta, discovery_json,
 };
 pub use span::{
-    EventName, Span, SpanEvent, SpanGuard, SpanName, open_operation, open_span, push_empty,
-    push_error, push_event, push_observation, push_result, reset, take_spans,
+    EventName, Span, SpanEvent, SpanGuard, SpanName, SpanStatus, open_operation, open_span,
+    push_empty, push_error, push_event, push_fault, push_observation, push_result, reset,
+    set_status, take_spans,
 };
 pub use to_value::ToValue;
 pub use value::Value;

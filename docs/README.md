@@ -9,6 +9,9 @@ Shared planning context for humans and coding agents working on Driftwatch.
 - [Trace emission contract](trace-contract.md) — Driftwatch's **CTSC 0.1 producer
   profile**: how each annotation maps to CTSC spans/events/values. The emitter
   phase and the golden corpus implement this.
+- [Value canonicalization](value-canonicalization.md) — why captured values are
+  encoded as **nested structural `Value`** (not flattened named lines), and the
+  semantic-naming escape hatch for representation-independent identity.
 - [Agentic loop](agentic-loop.md) — how the orchestrator observes, plans,
   delegates to specialists, and verifies before human PR review.
 - [LLM digest](digests/llm.md) — operational facts and decision boundaries for

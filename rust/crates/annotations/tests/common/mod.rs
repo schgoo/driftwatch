@@ -81,3 +81,22 @@ pub fn error(name: &str, value: impl ToValue) -> SpanEvent {
         ]),
     }
 }
+
+/// A `conformance.fault` event (`fault.observer` + `fault.message`) for the
+/// panic-disposition path. The observer is always `"target"`; the message is the
+/// raw panic payload string.
+pub fn fault(observer: &str, message: &str) -> SpanEvent {
+    SpanEvent {
+        name: EventName::Fault,
+        attributes: BTreeMap::from([
+            (
+                "conformance.fault.observer".to_string(),
+                Value::String(observer.to_string()),
+            ),
+            (
+                "conformance.fault.message".to_string(),
+                Value::String(message.to_string()),
+            ),
+        ]),
+    }
+}
