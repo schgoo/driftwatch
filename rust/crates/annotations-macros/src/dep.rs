@@ -8,7 +8,8 @@
 //!   carries one entry per argument (by identifier, `&`/`&mut` peeled; else
 //!   positional `arg{i}`); its `conformance.component.id` is the dep's declared
 //!   component else the enclosing operation's;
-//! - the original call, run verbatim and bound to a temp;
+//! - the original call, run verbatim (inside `catch_unwind`) and bound to a
+//!   temp;
 //! - the child span's completion event — `result` (Ok, unwrapped) or `error`
 //!   (Err, decomposed like an operation's, with the fallback name `"error"`);
 //! - close the child span, then re-apply the original pattern and any trailing
@@ -19,13 +20,19 @@
 //! then propagated. Arguments are re-evaluated in the call, so they must be
 //! side-effect-free (identifiers, literals, field accesses).
 //!
+//! A **panic** in the dep call is dispositioned as a `conformance.fault` on the
+//! dep span (status `Error`, no completion) and then re-propagated, so the
+//! enclosing operation faults too — the ratified Option A cascade (a panic
+//! faults every enclosing watched frame). `catch_unwind` intercepts only a
+//! panic; an `Err` disposition is unaffected.
+//!
 //! Only a direct function or method call (optionally one trailing `?`) is
 //! supported; `.await`, chained combinators, and non-call initializers produce a
 //! `compile_error!`.
 
 use syn::{Block, Expr, Local, Stmt, parse_quote};
 
-use crate::shared::{DepArgs, rt};
+use crate::shared::{DepArgs, fault_arm, rt};
 
 /// Diagnostic emitted when `#[watch_dep]` is attached to an unsupported
 /// initializer shape.
@@ -75,11 +82,22 @@ pub fn expand_dep_let(local: &Local, args: &DepArgs, parent_component: &str) -> 
     // Observe the `Result` by borrow inside the child span, then close it and
     // apply the original binding and `?`.
     let maybe_q: Option<syn::Token![?]> = is_try.then(|| parse_quote!(?));
+    // Panic disposition (ratified Option A cascade): a panic in the dep call
+    // faults the dep span (the current stack top) and then re-propagates, so the
+    // enclosing operation's own `catch_unwind` faults it too. `catch_unwind`
+    // intercepts only a panic; an `Err` disposition still flows through as the
+    // `Ok` value and is handled by the `match &__dw_res` below.
+    let fault = fault_arm();
     let call: Block = parse_quote!({
         let mut __dw_inputs = ::std::collections::BTreeMap::new();
         #(#input_inserts)*
         let __dw_dep = #rt::open_operation(#dep_name, #dep_component, __dw_inputs);
-        let __dw_res = (#inner);
+        let __dw_res = match ::std::panic::catch_unwind(
+            ::std::panic::AssertUnwindSafe(move || #inner),
+        ) {
+            ::core::result::Result::Ok(__dw_v) => __dw_v,
+            ::core::result::Result::Err(__dw_payload) => #fault,
+        };
         match &__dw_res {
             ::core::result::Result::Ok(__dw_v) => {
                 #rt::push_result(#rt::ToValue::to_value(__dw_v));

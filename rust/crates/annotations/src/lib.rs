@@ -18,8 +18,8 @@
 //! - Macros: [`watch_operation`], [`watch_dep`], [`watch_point`],
 //!   [`watch_input`], and the [`Watchable`](macro@Watchable) derive.
 //! - Runtime items users interact with directly: [`Value`], [`ToValue`],
-//!   [`Span`], [`SpanEvent`], [`SpanName`], [`EventName`], [`take_spans`], and
-//!   [`reset`].
+//!   [`Span`], [`SpanEvent`], [`SpanName`], [`SpanStatus`], [`EventName`],
+//!   [`take_spans`], and [`reset`].
 //!
 //! # Production gating
 //!
@@ -31,7 +31,9 @@
 //! extraction driver does while taking a snapshot.
 
 pub use annotations_macros::{Watchable, watch_dep, watch_input, watch_operation, watch_point};
-pub use runtime::{EventName, Span, SpanEvent, SpanName, ToValue, Value, reset, take_spans};
+pub use runtime::{
+    EventName, Span, SpanEvent, SpanName, SpanStatus, ToValue, Value, reset, take_spans,
+};
 
 /// Hidden plumbing the generated macro code funnels through. Not part of the
 /// stable public API — user code should never name it directly.
