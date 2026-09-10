@@ -87,7 +87,7 @@ Tagged-union variant labels carry no type identity; that lives in the registry
 
 ## Producer choices
 
-1. **Dependencies are nested operations** — `watch_dep` emits a child
+1. **Dependencies are nested operations** — `watch_dep!(…)` emits a child
    `conformance.operation` (own inputs + completion); there is no separate
    dependency event vocabulary.
 2. **Inputs are a span attribute**, not per-input events.
@@ -95,7 +95,7 @@ Tagged-union variant labels carry no type identity; that lives in the registry
    the annotation surface (`component = "…"`, **mandatory** on
    `watch_operation`); it is language-agnostic (a Rust and a C# implementation of
    the same component declare the same id). Observations inherit the enclosing
-   operation's component; a `watch_dep` inherits its enclosing operation's
+   operation's component; a `watch_dep!` inherits its enclosing operation's
    component unless it declares an override, and grandchildren inherit the dep's
    effective component.
 4. **Declared-error mapping.** Each native error / declared exception maps

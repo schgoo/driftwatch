@@ -9,7 +9,9 @@
 
 mod common;
 
-use annotations::{SpanName, SpanStatus, Value, reset, take_spans, watch_operation, watch_point};
+use annotations::{
+    SpanName, SpanStatus, Value, reset, take_spans, watch_dep, watch_operation, watch_point,
+};
 use common::{fault, obs, op_attrs};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -194,7 +196,7 @@ fn non_string_panic_payload_falls_back() {
 // ---------------------------------------------------------------------------
 
 /// An unannotated dependency that panics on bad input. Returns `Result` because
-/// `#[watch_dep]` observes the call's `Ok`/`Err` disposition; the `Err` branch
+/// `watch_dep!` observes the call's `Ok`/`Err` disposition; the `Err` branch
 /// keeps the wrapper honest (the test drives the panic path via `n < 0`).
 fn cascade_inner(n: i64) -> Result<i64, String> {
     assert!(n >= 0, "bad n");
@@ -206,8 +208,7 @@ fn cascade_inner(n: i64) -> Result<i64, String> {
 
 #[watch_operation(component = "annotations")]
 fn cascade_outer(n: i64) -> Result<i64, String> {
-    #[watch_dep("cascade_inner")]
-    let inner = cascade_inner(n)?;
+    let inner = watch_dep!("cascade_inner", cascade_inner(n))?;
     Ok(inner + 1)
 }
 

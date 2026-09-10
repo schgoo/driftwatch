@@ -15,8 +15,9 @@
 //!
 //! # Public surface
 //!
-//! - Macros: [`watch_operation`], [`watch_dep`], [`watch_point`],
-//!   [`watch_input`], and the [`Watchable`](macro@Watchable) derive.
+//! - Attribute macros: [`watch_operation`], [`watch_input`], and the
+//!   [`Watchable`](macro@Watchable) derive.
+//! - Function-like macros: [`watch_point`] and [`watch_dep`].
 //! - Runtime items users interact with directly: [`Value`], [`ToValue`],
 //!   [`Span`], [`SpanEvent`], [`SpanName`], [`SpanStatus`], [`EventName`],
 //!   [`take_spans`], and [`reset`].

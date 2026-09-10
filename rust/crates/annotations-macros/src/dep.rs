@@ -1,141 +1,251 @@
-//! The `#[watch_dep("name", component = "...")]` `let`-binding rewrite.
+//! The `watch_dep!("name", <expr>)` function-like macro.
 //!
-//! Applied to a `let` inside a `#[watch_operation]` body; purely observational.
-//! For `let x = dep.call(a, &b)?;` it expands to a **nested
-//! `conformance.operation` span**:
+//! `watch_dep!` is a transparent observer in expression position: it runs the
+//! wrapped call, emits a nested `conformance.operation` span (own inputs +
+//! completion) as a side effect, and returns the wrapped expression's value
+//! **unchanged** (`Result`→`Result`, `Option`→`Option`, `T`→`T`). Combinators
+//! and `?` compose *outside* the macro; a trailing `.await` lives *inside*.
 //!
-//! - open a child span named `name` whose `conformance.operation.inputs` kvlist
-//!   carries one entry per argument (by identifier, `&`/`&mut` peeled; else
-//!   positional `arg{i}`); its `conformance.component.id` is the dep's declared
-//!   component else the enclosing operation's;
-//! - the original call, run verbatim (inside `catch_unwind`) and bound to a
-//!   temp;
-//! - the child span's completion event — `result` (Ok, unwrapped) or `error`
-//!   (Err, decomposed like an operation's, with the fallback name `"error"`);
-//! - close the child span, then re-apply the original pattern and any trailing
-//!   `?`.
+//! For `watch_dep!("parse", i64::from_str_radix(text, 16))` the expansion:
 //!
-//! The real call always runs and its `Result` binds unchanged: no table, no
-//! substitution. The `?` is observed before it unwraps, so an `Err` is recorded
-//! then propagated. Arguments are re-evaluated in the call, so they must be
-//! side-effect-free (identifiers, literals, field accesses).
+//! - binds each call argument once to a temp (no double-eval), borrows it for
+//!   `ToValue` capture keyed by identifier (`text`) or positionally (`arg1`),
+//!   then moves it into the reconstructed call;
+//! - opens a child span via `open_dep` whose component is the optional
+//!   `component = "…"` override, else the enclosing operation's (a runtime stack
+//!   read);
+//! - runs the real call inside `catch_unwind` (sync) / `catch_unwind_fut`
+//!   (async), so a panic is dispositioned as a `conformance.fault` on the dep
+//!   span and re-propagated (the ratified Option A cascade);
+//! - dispositions the returned value through the runtime `DepObserve` ladder
+//!   (`Ok`/`Some`→`result`, `Err`→`error`, `None`→`empty`) *before* handing it
+//!   back, so an `Err` is recorded even though the caller's `?` unwraps outside;
+//! - closes the child span and evaluates to the original value.
 //!
-//! A **panic** in the dep call is dispositioned as a `conformance.fault` on the
-//! dep span (status `Error`, no completion) and then re-propagated, so the
-//! enclosing operation faults too — the ratified Option A cascade (a panic
-//! faults every enclosing watched frame). `catch_unwind` intercepts only a
-//! panic; an `Err` disposition is unaffected.
+//! A trailing `.await` is peeled for input-capture/observation and re-applied
+//! inside the awaited path; `?` and other combinators are the author's to place
+//! outside. A non-call initializer (`watch_dep!("cfg", CONFIG)`) captures zero
+//! inputs and is value-only. A wrapped argument that is not `ToValue` is a
+//! natural compile error — the intended boundary guard.
 //!
-//! Only a direct function or method call (optionally one trailing `?`) is
-//! supported; `.await`, chained combinators, and non-call initializers produce a
-//! `compile_error!`.
+//! With `trace` off the macro is a true identity: it expands to the wrapped
+//! expression verbatim, with no temps, no bindings, and no `__rt` references.
 
-use syn::{Block, Expr, Local, Stmt, parse_quote};
+use proc_macro::TokenStream;
+#[cfg(feature = "trace")]
+use proc_macro2::TokenStream as TokenStream2;
+#[cfg(feature = "trace")]
+use quote::format_ident;
+use quote::quote;
+use syn::parse::{Parse, ParseStream};
+use syn::{Expr, LitStr, Token, parse_macro_input};
 
-use crate::shared::{DepArgs, fault_arm, rt};
+/// The parsed `watch_dep!("name"[, component = "…"], <expr>)` invocation. The
+/// name is mandatory; the component override is optional (a keyword arg); the
+/// expression is the wrapped call.
+#[cfg_attr(
+    not(feature = "trace"),
+    allow(
+        dead_code,
+        reason = "name/component are read only by the trace-on expansion; the identity path uses only `expr`"
+    )
+)]
+pub struct DepCall {
+    /// The dependency (nested-operation) name.
+    name: LitStr,
+    /// An explicit component override, or `None` to inherit the parent's.
+    component: Option<LitStr>,
+    /// The wrapped expression (the real dependency call).
+    expr: Expr,
+}
 
-/// Diagnostic emitted when `#[watch_dep]` is attached to an unsupported
-/// initializer shape.
-const UNSUPPORTED_SHAPE: &str = "#[watch_dep] expects a direct function or method call as the initializer (an optional trailing `?` is allowed); `.await`, chained calls, and other initializer shapes are not supported";
+impl Parse for DepCall {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let name: LitStr = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let mut component = None;
+        // `component = "…"` is disambiguated from an expression by the `ident =`
+        // prefix; a call or path never starts `ident =`.
+        if input.peek(syn::Ident) && input.peek2(Token![=]) {
+            let key: syn::Ident = input.parse()?;
+            if key != "component" {
+                return Err(syn::Error::new(
+                    key.span(),
+                    "expected `component = \"...\"`",
+                ));
+            }
+            input.parse::<Token![=]>()?;
+            component = Some(input.parse::<LitStr>()?);
+            input.parse::<Token![,]>()?;
+        }
+        let expr: Expr = input.parse()?;
+        Ok(DepCall {
+            name,
+            component,
+            expr,
+        })
+    }
+}
 
-/// If `attrs` carry a `#[watch_dep("name", ...)]`, return the parsed args.
-pub fn take_dep_args(attrs: &[syn::Attribute]) -> Option<DepArgs> {
-    for a in attrs {
-        if a.path().is_ident("watch_dep")
-            && let Ok(args) = a.parse_args::<DepArgs>()
+/// Trace-off identity: expand to the wrapped expression verbatim.
+#[cfg(not(feature = "trace"))]
+pub fn expand_identity(input: TokenStream) -> TokenStream {
+    let DepCall { expr, .. } = parse_macro_input!(input as DepCall);
+    quote!(#expr).into()
+}
+
+/// Trace-on expansion: the transparent-observer block.
+#[cfg(feature = "trace")]
+pub fn expand(input: TokenStream) -> TokenStream {
+    use crate::shared::{fault_arm, rt};
+
+    let DepCall {
+        name,
+        component,
+        expr,
+    } = parse_macro_input!(input as DepCall);
+    let rt = rt();
+
+    let component_tok = if let Some(c) = &component {
+        quote! { ::core::option::Option::Some(#c) }
+    } else {
+        quote! { ::core::option::Option::None }
+    };
+
+    // Peel only a trailing `.await`; re-applied inside the awaited path.
+    let (peeled, is_await): (&Expr, bool) = if let Expr::Await(a) = &expr {
+        (a.base.as_ref(), true)
+    } else {
+        (&expr, false)
+    };
+
+    let Parts {
+        temp_lets,
+        input_inserts,
+        call_expr,
+    } = build_call(peeled);
+
+    let fault = fault_arm();
+    let run = if is_await {
+        quote! {
+            match #rt::catch_unwind_fut(async move { #call_expr.await }).await {
+                ::core::result::Result::Ok(__dw_v) => __dw_v,
+                ::core::result::Result::Err(__dw_payload) => #fault,
+            }
+        }
+    } else {
+        quote! {
+            match ::std::panic::catch_unwind(
+                ::std::panic::AssertUnwindSafe(move || #call_expr),
+            ) {
+                ::core::result::Result::Ok(__dw_v) => __dw_v,
+                ::core::result::Result::Err(__dw_payload) => #fault,
+            }
+        }
+    };
+
+    quote! {
         {
-            return Some(args);
+            #(#temp_lets)*
+            let mut __dw_inputs = ::std::collections::BTreeMap::new();
+            #(#input_inserts)*
+            let __dw_dep = #rt::open_dep(#name, #component_tok, __dw_inputs);
+            let __dw_res = #run;
+            {
+                use #rt::DepObserveResult as _;
+                use #rt::DepObserveOption as _;
+                use #rt::DepObserveResultDebug as _;
+                use #rt::DepObserveOptionDebug as _;
+                use #rt::DepObserveToValue as _;
+                use #rt::DepObserveDisplay as _;
+                use #rt::DepObserveDebug as _;
+                use #rt::DepObserveOther as _;
+                (&&&&&&&#rt::DepObserve(&__dw_res)).observe();
+            }
+            ::core::mem::drop(__dw_dep);
+            __dw_res
         }
     }
-    None
+    .into()
 }
 
-/// Expand a `#[watch_dep]` `let` into a nested `conformance.operation` span
-/// around the real call (trailing `?` preserved). `None` when there is no
-/// initializer, or it is not a call after peeling `?`. `parent_component` is the
-/// enclosing operation's effective component, inherited when the dep declares no
-/// override.
-pub fn expand_dep_let(local: &Local, args: &DepArgs, parent_component: &str) -> Option<Vec<Stmt>> {
-    let init = local.init.as_ref()?;
+/// The pieces of a reconstructed dependency call: temp bindings that evaluate
+/// each argument (and a method receiver) once, the `conformance.operation.inputs`
+/// inserts that borrow those temps, and the call expression that moves them.
+#[cfg(feature = "trace")]
+struct Parts {
+    temp_lets: Vec<TokenStream2>,
+    input_inserts: Vec<TokenStream2>,
+    call_expr: TokenStream2,
+}
 
-    // Peel a trailing `?`; re-applied verbatim after observation.
-    let (inner, is_try): (&Expr, bool) = match &*init.expr {
-        Expr::Try(t) => (&t.expr, true),
-        other => (other, false),
-    };
-
-    let inputs = dep_inputs(inner)?;
+/// Split a call into per-argument temps + input captures + a reconstructed call.
+///
+/// A method call binds its receiver first (evaluation order) then each arg; a
+/// free call binds each arg and keeps the callee verbatim. Every argument is
+/// captured as an input (identifier-keyed, else positional); the receiver is
+/// bound but never captured. A non-call expression captures nothing and is used
+/// verbatim.
+#[cfg(feature = "trace")]
+fn build_call(peeled: &Expr) -> Parts {
+    use crate::shared::rt;
     let rt = rt();
-    let pat = &local.pat;
-    let dep_name = &args.name;
-    let dep_component: &str = args.component.as_deref().unwrap_or(parent_component);
-
-    let input_inserts: Vec<proc_macro2::TokenStream> = inputs
-        .iter()
-        .map(|(name, expr)| {
-            quote::quote! {
-                __dw_inputs.insert(#name.to_string(), #rt::ToValue::to_value(&(#expr)));
+    match peeled {
+        Expr::MethodCall(mc) => {
+            let recv = &mc.receiver;
+            let method = &mc.method;
+            let turbofish = &mc.turbofish;
+            let mut temp_lets = vec![quote! { let __dw_recv = #recv; }];
+            let mut input_inserts = Vec::new();
+            let mut arg_idents = Vec::new();
+            for (i, a) in mc.args.iter().enumerate() {
+                let id = format_ident!("__dw_arg{}", i);
+                temp_lets.push(quote! { let #id = #a; });
+                let name = arg_name(i, a);
+                input_inserts.push(quote! {
+                    __dw_inputs.insert(#name.to_string(), #rt::ToValue::to_value(&#id));
+                });
+                arg_idents.push(id);
             }
-        })
-        .collect();
-
-    // Observe the `Result` by borrow inside the child span, then close it and
-    // apply the original binding and `?`.
-    let maybe_q: Option<syn::Token![?]> = is_try.then(|| parse_quote!(?));
-    // Panic disposition (ratified Option A cascade): a panic in the dep call
-    // faults the dep span (the current stack top) and then re-propagates, so the
-    // enclosing operation's own `catch_unwind` faults it too. `catch_unwind`
-    // intercepts only a panic; an `Err` disposition still flows through as the
-    // `Ok` value and is handled by the `match &__dw_res` below.
-    let fault = fault_arm();
-    let call: Block = parse_quote!({
-        let mut __dw_inputs = ::std::collections::BTreeMap::new();
-        #(#input_inserts)*
-        let __dw_dep = #rt::open_operation(#dep_name, #dep_component, __dw_inputs);
-        let __dw_res = match ::std::panic::catch_unwind(
-            ::std::panic::AssertUnwindSafe(move || #inner),
-        ) {
-            ::core::result::Result::Ok(__dw_v) => __dw_v,
-            ::core::result::Result::Err(__dw_payload) => #fault,
-        };
-        match &__dw_res {
-            ::core::result::Result::Ok(__dw_v) => {
-                #rt::push_result(#rt::ToValue::to_value(__dw_v));
+            let call_expr = quote! { __dw_recv.#method #turbofish (#(#arg_idents),*) };
+            Parts {
+                temp_lets,
+                input_inserts,
+                call_expr,
             }
-            ::core::result::Result::Err(__dw_e) => {
-                use #rt::ValueEmitToValue as _;
-                use #rt::ValueEmitDisplay as _;
-                use #rt::ValueEmitDebug as _;
-                use #rt::ValueEmitUniversal as _;
-                let __dw_val = (&&&&#rt::ValueEmit(&__dw_e)).encode();
-                let (__dw_n, __dw_ev) = #rt::split_error(__dw_val, "error");
-                #rt::push_error(__dw_n, __dw_ev);
+        }
+        Expr::Call(c) => {
+            let func = &c.func;
+            let mut temp_lets = Vec::new();
+            let mut input_inserts = Vec::new();
+            let mut arg_idents = Vec::new();
+            for (i, a) in c.args.iter().enumerate() {
+                let id = format_ident!("__dw_arg{}", i);
+                temp_lets.push(quote! { let #id = #a; });
+                let name = arg_name(i, a);
+                input_inserts.push(quote! {
+                    __dw_inputs.insert(#name.to_string(), #rt::ToValue::to_value(&#id));
+                });
+                arg_idents.push(id);
             }
-        };
-        ::core::mem::drop(__dw_dep);
-        let #pat = __dw_res #maybe_q;
-    });
-    Some(call.stmts)
+            let call_expr = quote! { (#func)(#(#arg_idents),*) };
+            Parts {
+                temp_lets,
+                input_inserts,
+                call_expr,
+            }
+        }
+        other => Parts {
+            temp_lets: Vec::new(),
+            input_inserts: Vec::new(),
+            call_expr: quote! { #other },
+        },
+    }
 }
 
-/// Each call argument paired with its event-name suffix. `None` when the
-/// initializer is not a direct function or method call.
-fn dep_inputs(e: &Expr) -> Option<Vec<(String, &Expr)>> {
-    let args = match e {
-        Expr::MethodCall(mc) => &mc.args,
-        Expr::Call(c) => &c.args,
-        _ => return None,
-    };
-    Some(
-        args.iter()
-            .enumerate()
-            .map(|(i, a)| (arg_name(i, a), a))
-            .collect(),
-    )
-}
-
-/// The event-name suffix for the `i`th argument: its identifier when it is a
-/// bare path (peeling a leading `&`/`&mut`), otherwise the positional `arg{i}`.
+/// The input-name for the `i`th argument: its identifier when it is a bare path
+/// (peeling a leading `&`/`&mut`), otherwise the positional `arg{i}`.
+#[cfg(feature = "trace")]
 fn arg_name(i: usize, a: &Expr) -> String {
     match a {
         Expr::Reference(r) => arg_name(i, &r.expr),
@@ -145,22 +255,4 @@ fn arg_name(i: usize, a: &Expr) -> String {
         },
         _ => format!("arg{i}"),
     }
-}
-
-/// Rewrite a `#[watch_dep]`-tagged `let`: expanded statements on success;
-/// unsupported shapes strip the attribute and prepend a `compile_error!`.
-/// Untagged `let`s pass through unchanged. `parent_component` is the enclosing
-/// operation's effective component.
-pub fn rewrite_local(local: Local, parent_component: &str) -> Vec<Stmt> {
-    let Some(args) = take_dep_args(&local.attrs) else {
-        return vec![Stmt::Local(local)];
-    };
-    if let Some(stmts) = expand_dep_let(&local, &args, parent_component) {
-        return stmts;
-    }
-    let mut stripped = local;
-    stripped.attrs.retain(|a| !a.path().is_ident("watch_dep"));
-    let msg = syn::LitStr::new(UNSUPPORTED_SHAPE, proc_macro2::Span::call_site());
-    let err: Stmt = parse_quote! { ::core::compile_error!(#msg); };
-    vec![err, Stmt::Local(stripped)]
 }

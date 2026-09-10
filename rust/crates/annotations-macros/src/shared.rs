@@ -52,37 +52,6 @@ impl syn::parse::Parse for OperationArgs {
     }
 }
 
-/// The arguments of `#[watch_dep("name", component = "...")]`. The name is
-/// mandatory; the component is optional and defaults to the enclosing
-/// operation's effective component.
-#[derive(Debug)]
-pub struct DepArgs {
-    /// The dependency (nested-operation) name.
-    pub name: String,
-    /// An explicit component override, or `None` to inherit the parent's.
-    pub component: Option<String>,
-}
-
-impl syn::parse::Parse for DepArgs {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let name = input.parse::<LitStr>()?.value();
-        let mut component = None;
-        if input.peek(Token![,]) {
-            let _: Token![,] = input.parse()?;
-            let key: Ident = input.parse()?;
-            if key != "component" {
-                return Err(syn::Error::new(
-                    key.span(),
-                    "expected `component = \"...\"`",
-                ));
-            }
-            let _: Token![=] = input.parse()?;
-            component = Some(input.parse::<LitStr>()?.value());
-        }
-        Ok(Self { name, component })
-    }
-}
-
 /// The CTSC `error.name` fallback for a `Result<T, E>` return: the last path
 /// segment of `E` (stringified). Used when the decomposed error value is not a
 /// tagged variant. Falls back to `"error"` when `E` is not an inspectable path.
@@ -351,20 +320,6 @@ mod tests {
                 .component,
             "comp.app"
         );
-    }
-
-    #[test]
-    fn dep_name_only_inherits_component() {
-        let args = syn::parse_str::<DepArgs>(r#""parse""#).unwrap();
-        assert_eq!(args.name, "parse");
-        assert_eq!(args.component, None);
-    }
-
-    #[test]
-    fn dep_component_override_is_parsed() {
-        let args = syn::parse_str::<DepArgs>(r#""parse", component = "other""#).unwrap();
-        assert_eq!(args.name, "parse");
-        assert_eq!(args.component.as_deref(), Some("other"));
     }
 
     #[test]

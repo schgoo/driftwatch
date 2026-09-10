@@ -36,7 +36,6 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut visitor = BodyInstrumenter {
         param_names: param_names.clone(),
-        component: component.clone(),
     };
     visitor.visit_block_mut(&mut func.block);
     let body = &func.block;
