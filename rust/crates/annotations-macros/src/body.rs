@@ -1,27 +1,19 @@
-//! Body instrumentation for `#[watch_operation]`: field-mutation echo and
-//! dispatch to the `#[watch_dep]` `let`-rewrite.
+//! Body instrumentation for `#[watch_operation]`: field-mutation echo.
 //!
 //! The [`BodyInstrumenter`] walks the operation body, recursing into nested
-//! blocks first. It rewrites each `#[watch_dep]`-tagged `let` (see [`crate::dep`])
-//! and, after any statement that mutates a field of `self` or of a value
-//! parameter (`self.x = …`, `param.x += …`), inserts an event echoing the new
-//! field value.
+//! blocks first, and after any statement that mutates a field of `self` or of a
+//! value parameter (`self.x = …`, `param.x += …`), inserts an event echoing the
+//! new field value.
 
 use syn::visit_mut::VisitMut;
 use syn::{BinOp, Block, Expr, Stmt, parse_quote};
 
-use crate::dep::rewrite_local;
 use crate::shared::rt;
 
-/// Rewrites an operation body in place: expands `#[watch_dep]` bindings and
-/// appends field-mutation echo events.
+/// Rewrites an operation body in place: appends field-mutation echo events.
 pub struct BodyInstrumenter {
     /// The value-parameter names whose field mutations are echoed.
     pub param_names: Vec<String>,
-    /// The enclosing operation's declared component, threaded into each
-    /// `#[watch_dep]` so a nested-operation span that omits its own `component`
-    /// inherits the parent's.
-    pub component: String,
 }
 
 impl VisitMut for BodyInstrumenter {
@@ -39,15 +31,10 @@ impl VisitMut for BodyInstrumenter {
         let mut new: Vec<Stmt> = Vec::with_capacity(original.len());
 
         for stmt in original {
-            match stmt {
-                Stmt::Local(local) => new.extend(rewrite_local(local, &self.component)),
-                stmt => {
-                    let emit_after = field_mutation_emit(&stmt, &self.param_names);
-                    new.push(stmt);
-                    if let Some(after) = emit_after {
-                        new.push(after);
-                    }
-                }
+            let emit_after = field_mutation_emit(&stmt, &self.param_names);
+            new.push(stmt);
+            if let Some(after) = emit_after {
+                new.push(after);
             }
         }
 

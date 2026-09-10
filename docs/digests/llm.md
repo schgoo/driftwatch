@@ -38,7 +38,7 @@ behavior — no hand-authored assertion to weaken.
   payload or Display string) — completion is real span events, not a synthetic
   result placeholder. Inputs are
   one `conformance.operation.inputs` kvlist attribute keyed by bare identifier;
-  a `#[watch_dep]` is a nested `conformance.operation` span; `watch_point!` and
+  a `watch_dep!(…)` is a nested `conformance.operation` span; `watch_point!` and
   field mutations emit `conformance.observation` events. The flat `WatchEvent` /
   `emit_*` / `take_events` path is retired.
 

@@ -112,7 +112,7 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
 - **#3** — `runtime` pt2: buffer, `emit_*`/`take_traces`/`reset`, registry (`OpMeta`/`TypeMeta`/discovery), `SpecEvent`. **No serialization** (deferred to #11). ▪ ~400
 - **#4** ✅ — core annotations: `#[watch_operation]` + `#[watch_input]` + `watch_point!` + facade re-exports; per-parameter inputs, field-mutation echo, `$result` via `ReturnEmit` (retired in #37). Macro surface committed as `watch_*` (D1). ▪
 - **#29** — `#[derive(Watchable)]`: structural struct/enum emission (includes the Watchable merge). Unblocks the struct/enum outcome clauses. ▪
-- **#30** ✅ — `#[watch_dep]` dependency-boundary tracer: per-arg inputs + real-call `.response`/`.error`, optional `?`, `compile_error!` on unsupported shapes. Observation-only (substitution dropped → #27). ▪
+- **#30** ✅ — dependency-boundary tracer: per-arg inputs + real-call `.response`/`.error`, optional `?`. Observation-only (substitution dropped → #27). The original `#[watch_dep]` *attribute* form is **retired** — superseded by the expression-position `watch_dep!("name", <expr>)` function-like macro (transparent observer; unifies with `watch_point!`; non-call shapes are value-only, no `compile_error!`). ▪
 
 - **Emission contract ratified** ✅ — `docs/trace-contract.md` adopts CTSC 0.1 as Driftwatch's producer profile; D1–D5 resolved. Prereq for the emission items and the golden corpus.
 - **#37** ✅ — CTSC completion events: operation completion emits as
@@ -124,7 +124,13 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
   (author-declared `component`) and **#45** (structural error decomposition).
   Retires the flat `WatchEvent` path and the `Map` `{Ok|Err}`/`{Some|None}`
   return tags. ▪
-- **#38** — dependency initializer shapes: `?` ✅; `.await`/async-dep support (needs an async operation + test executor); combinators stay `compile_error!`. ✚
+- **#38** ✅ — dependency initializer shapes, folded into the `watch_dep!` macro
+  redesign: `?` and combinators now compose **outside** the macro (author-placed),
+  `.await` is peeled/re-applied **inside**, and async deps use the panic-fault
+  `catch_unwind_fut` cascade. Also **subsumes `e1-unify`** ("all value types on
+  deps"): the `DepObserve` autoref ladder (`runtime/src/dep_observe.rs`) dispatches
+  `Result`/`Option`/plain-`T` dispositions on the observed runtime value, so every
+  value shape is handled with no per-shape `compile_error!`. ▪
 - **#39** — panic disposition: on a caught panic emit `conformance.fault` (+ partial trace, `ERROR` status), no result. ✚
 - **#40** ✅ — input surface: capture `&mut` non-receiver params as inputs (pre-call value at span open) — supersedes #4's `&mut` exclusion; receivers stay excluded and hidden inputs stay annotator-captured via `watch_point!`. Updated `operation_params` goldens. Whole-value deref-mutation observation (e.g. `*total += …`) remains a follow-up. ▪
 - **#42** — parallel branches: emit `conformance.parallel` with **unordered** child branches from concurrently-executing operations/dependencies. Defines cross-thread `SpanContext` propagation with **globally-unique `span_id`s** (lane-encoded: per-thread lane ∥ per-capture counter) so merged multi-thread spans keep unambiguous `parent_span_id` linkage; single-threaded captures stay byte-deterministic. Deferred from #37a, whose span substrate is single-threaded. Comparator pairs branches by identity, not order. ✚ ~350 · **load-bearing** (id-minting scheme)

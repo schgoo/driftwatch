@@ -297,6 +297,55 @@ pub fn open_operation(name: &str, component: &str, inputs: BTreeMap<String, Valu
     open_span(SpanName::Operation, attrs)
 }
 
+/// Open a dependency's nested `conformance.operation` span, resolving its
+/// component from the enclosing operation when none is declared.
+///
+/// A dependency is a nested operation (CTSC producer choice #1). Component
+/// inheritance is a **runtime** stack read: when `component` is `None`, the
+/// effective component is the enclosing operation span's
+/// `conformance.component.id` (see [`current_component`]); when `Some(c)`, `c`
+/// is used verbatim.
+///
+/// # Panics
+///
+/// Panics when opened with no enclosing operation on the current-span stack —
+/// a `watch_dep!` outside any `watch_operation` is invalid — even when an
+/// explicit `component` is passed. This only ever fires in a trace-on build
+/// (dev/test/extraction); in production the macro is identity and never reaches
+/// here.
+#[must_use = "dropping the guard immediately closes the span with no body"]
+pub fn open_dep(name: &str, component: Option<&str>, inputs: BTreeMap<String, Value>) -> SpanGuard {
+    let effective = match (component, current_component()) {
+        (Some(c), Some(_)) => c.to_string(),
+        (None, Some(parent)) => parent,
+        (_, None) => panic!(
+            "watch_dep! used outside any watch_operation; nest it inside a #[watch_operation]"
+        ),
+    };
+    open_operation(name, &effective, inputs)
+}
+
+/// The `conformance.component.id` of the current (stack-top) span, or `None`
+/// when the stack is empty or the top span carries no component attribute.
+///
+/// The `Frame` / `SPANS` / `STACK` thread-locals are private to this module —
+/// the CTSC key strings are owned here — so component inheritance is resolved
+/// in-place rather than through an external accessor.
+fn current_component() -> Option<String> {
+    let index = STACK.with(|s| s.borrow().last().map(|f| f.buffer_index))?;
+    SPANS.with(|b| {
+        match b
+            .borrow()
+            .get(index)?
+            .attributes
+            .get("conformance.component.id")
+        {
+            Some(Value::String(c)) => Some(c.clone()),
+            _ => None,
+        }
+    })
+}
+
 /// Push a `conformance.observation` event (`observation.name` +
 /// `observation.value`) onto the current span.
 pub fn push_observation(name: &str, value: Value) {

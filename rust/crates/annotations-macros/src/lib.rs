@@ -16,10 +16,10 @@
 //! statics, and ZERO `__rt` references:
 //!
 //! - `#[watch_operation]` → the annotated item unchanged (bar removing the inert
-//!   `#[watch_input]` / `#[watch_dep]` helper attributes, which cannot stand
-//!   alone on a param or a statement);
-//! - `#[watch_input]` / `#[watch_dep]` → the annotated statement unchanged;
+//!   `#[watch_input]` helper attribute, which cannot stand alone on a param);
+//! - `#[watch_input]` → the annotated parameter unchanged;
 //! - `watch_point!(…)` → `()`;
+//! - `watch_dep!("name", <expr>)` → the wrapped expression verbatim;
 //! - `#[derive(Watchable)]` → nothing (no impls, no registry statics).
 //!
 //! # Layout exception
@@ -31,10 +31,12 @@
 //! is a thin, feature-gated delegate.
 
 // The expansion logic is only reachable with the `trace` feature; gating the
-// modules keeps a `--no-default-features` build free of dead code.
+// modules keeps a `--no-default-features` build free of dead code. The `dep`
+// module is the exception: its `DepCall` parser + identity expansion are needed
+// in both configurations (the trace-off `watch_dep!` still parses to recover the
+// wrapped expression), so only its trace-on `expand` is feature-gated internally.
 #[cfg(feature = "trace")]
 mod body;
-#[cfg(feature = "trace")]
 mod dep;
 #[cfg(feature = "trace")]
 mod operation;
@@ -68,20 +70,17 @@ pub fn watch_operation(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-/// Strip the inert `#[watch_input]` / `#[watch_dep]` helper attributes from an
-/// identity (trace-off) expansion.
+/// Strip the inert `#[watch_input]` helper attribute from an identity
+/// (trace-off) expansion.
 ///
-/// `#[watch_input]` (on a value parameter) and `#[watch_dep]` (on a `let` in the
-/// body) are only ever meaningful as helpers consumed by an enclosing
-/// `#[watch_operation]`; a bare attribute-macro cannot legally sit on a
-/// parameter or a statement. With `trace` off `#[watch_operation]` performs no
-/// instrumentation, but it must still remove these helper attributes so the
+/// `#[watch_input]` (on a value parameter) is only ever meaningful as a helper
+/// consumed by an enclosing `#[watch_operation]`; a bare attribute-macro cannot
+/// legally sit on a parameter. With `trace` off `#[watch_operation]` performs no
+/// instrumentation, but it must still remove this helper attribute so the
 /// untouched item compiles. Falls back to the input unchanged if it does not
 /// parse as a `fn`.
 #[cfg(not(feature = "trace"))]
 fn strip_helper_attrs(item: TokenStream) -> TokenStream {
-    use syn::visit_mut::VisitMut;
-
     let Ok(mut func) = syn::parse::<syn::ItemFn>(item.clone()) else {
         return item;
     };
@@ -90,25 +89,7 @@ fn strip_helper_attrs(item: TokenStream) -> TokenStream {
             pt.attrs.retain(|a| !a.path().is_ident("watch_input"));
         }
     }
-    StripWatchDep.visit_block_mut(&mut func.block);
     quote::quote!(#func).into()
-}
-
-/// Removes `#[watch_dep]` from every `let` binding in the body (including nested
-/// blocks and closures) for the trace-off identity expansion.
-#[cfg(not(feature = "trace"))]
-struct StripWatchDep;
-
-#[cfg(not(feature = "trace"))]
-impl syn::visit_mut::VisitMut for StripWatchDep {
-    #[allow(
-        clippy::renamed_function_params,
-        reason = "descriptive name for the visited local"
-    )]
-    fn visit_local_mut(&mut self, local: &mut syn::Local) {
-        local.attrs.retain(|a| !a.path().is_ident("watch_dep"));
-        syn::visit_mut::visit_local_mut(self, local);
-    }
 }
 
 /// `#[watch_input("name")]` — override the event name a parameter emits under.
@@ -121,17 +102,25 @@ pub fn watch_input(attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
-/// `#[watch_dep("name", component = "...")]` — observe a dependency call bound
-/// by a `let` inside a `#[watch_operation]` body.
+/// `watch_dep!("name", <expr>)` — observe a dependency call in expression
+/// position.
 ///
-/// Consumed and rewritten by the enclosing `#[watch_operation]`, which opens a
-/// nested `conformance.operation` span (own inputs + completion) around the real
-/// call; `component` is optional and defaults to the enclosing operation's.
-/// Identity in standalone position, in both configurations.
-#[proc_macro_attribute]
-pub fn watch_dep(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let _ = attr;
-    item
+/// A transparent observer: it runs the wrapped call, emits a nested
+/// `conformance.operation` span (own inputs + completion) as a side effect, and
+/// returns the wrapped expression's value unchanged. An optional
+/// `component = "…"` keyword arg overrides the inherited component; a trailing
+/// `.await` lives inside, while `?` and combinators compose outside. Off-trace
+/// the macro expands to the wrapped expression verbatim.
+#[proc_macro]
+pub fn watch_dep(input: TokenStream) -> TokenStream {
+    #[cfg(feature = "trace")]
+    {
+        dep::expand(input)
+    }
+    #[cfg(not(feature = "trace"))]
+    {
+        dep::expand_identity(input)
+    }
 }
 
 /// `#[derive(Watchable)]` — decompose a type to a `Value` and register it.

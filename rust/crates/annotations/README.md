@@ -20,8 +20,9 @@ shape is driven by the extraction driver’s needs and may change.
 
 ## Public surface
 
-* Macros: [`watch_operation`][__link3], [`watch_dep`][__link4], [`watch_point`][__link5],
-  [`watch_input`][__link6], and the [`Watchable`][__link7] derive.
+* Attribute macros: [`watch_operation`][__link3], [`watch_input`][__link4], and the
+  [`Watchable`][__link5] derive.
+* Function-like macros: [`watch_point`][__link6] and [`watch_dep`][__link7].
 * Runtime items users interact with directly: [`Value`][__link8], [`ToValue`][__link9],
   [`Span`][__link10], [`SpanEvent`][__link11], [`SpanName`][__link12], [`SpanStatus`][__link13], [`EventName`][__link14],
   [`take_spans`][__link15], and [`reset`][__link16].
@@ -40,7 +41,7 @@ extraction driver does while taking a snapshot.
 
 Part of the [Driftwatch](https://github.com/schgoo/driftwatch) project.
 
- [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQbfoquL7xZA6kb0ijaV-a49ScbmQe8YDFfNRobvpB1lwvcW3dhZIOCa2Fubm90YXRpb25zZTAuMS4wg3Jhbm5vdGF0aW9ucy1tYWNyb3NlMC4xLjByYW5ub3RhdGlvbnNfbWFjcm9zgmdydW50aW1lZTAuMS4w
+ [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQbKbOebnADXlMbGV-MVTyk3msbFrhzoHMZMykbbvBRPPqC_NRhZIOCa2Fubm90YXRpb25zZTAuMS4wg3Jhbm5vdGF0aW9ucy1tYWNyb3NlMC4xLjByYW5ub3RhdGlvbnNfbWFjcm9zgmdydW50aW1lZTAuMS4w
  [__link0]: https://docs.rs/runtime/0.1.0/runtime/?search=Span
  [__link1]: https://docs.rs/runtime/0.1.0/runtime/?search=take_spans
  [__link10]: https://docs.rs/runtime/0.1.0/runtime/?search=Span
@@ -52,9 +53,9 @@ Part of the [Driftwatch](https://github.com/schgoo/driftwatch) project.
  [__link16]: https://docs.rs/runtime/0.1.0/runtime/?search=reset
  [__link2]: https://docs.rs/annotations/0.1.0/annotations/__rt/index.html
  [__link3]: https://docs.rs/annotations-macros/0.1.0/annotations_macros/?search=watch_operation
- [__link4]: https://docs.rs/annotations-macros/0.1.0/annotations_macros/?search=watch_dep
- [__link5]: https://docs.rs/annotations-macros/0.1.0/annotations_macros/?search=watch_point
- [__link6]: https://docs.rs/annotations-macros/0.1.0/annotations_macros/?search=watch_input
- [__link7]: macro@Watchable
+ [__link4]: https://docs.rs/annotations-macros/0.1.0/annotations_macros/?search=watch_input
+ [__link5]: macro@Watchable
+ [__link6]: https://docs.rs/annotations-macros/0.1.0/annotations_macros/?search=watch_point
+ [__link7]: https://docs.rs/annotations-macros/0.1.0/annotations_macros/?search=watch_dep
  [__link8]: https://docs.rs/runtime/0.1.0/runtime/?search=Value
  [__link9]: https://docs.rs/runtime/0.1.0/runtime/?search=ToValue

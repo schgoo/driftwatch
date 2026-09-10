@@ -1,11 +1,11 @@
-//! Production gating: the same annotated code (including a `#[watch_dep]`
-//! binding) emits under `trace` and expands to inert identity (no spans) with
-//! the default no-`trace` build.
+//! Production gating: the same annotated code (including a `watch_dep!`
+//! observation) emits under `trace` and expands to inert identity (no spans)
+//! with the default no-`trace` build.
 //!
 //! Run the off path with `cargo test -p annotations`, the on path with
 //! `--all-features`. Asserts both configs via `cfg` (not `#[ignore]`d).
 
-use annotations::{reset, take_spans, watch_operation, watch_point};
+use annotations::{reset, take_spans, watch_dep, watch_operation, watch_point};
 
 #[watch_operation(component = "annotations")]
 fn add(a: i64, b: i64) -> i64 {
@@ -14,8 +14,7 @@ fn add(a: i64, b: i64) -> i64 {
 
 #[watch_operation(component = "annotations")]
 fn narrow(raw: i64) -> i64 {
-    #[watch_dep("convert")]
-    let byte = u8::try_from(raw);
+    let byte = watch_dep!("convert", u8::try_from(raw));
     byte.map_or(-1, i64::from)
 }
 

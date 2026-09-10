@@ -21,10 +21,10 @@ identity, so the output carries ZERO `emit_*` calls, ZERO `linkme` registry
 statics, and ZERO `__rt` references:
 
 * `#[watch_operation]` → the annotated item unchanged (bar removing the inert
-  `#[watch_input]` / `#[watch_dep]` helper attributes, which cannot stand
-  alone on a param or a statement);
-* `#[watch_input]` / `#[watch_dep]` → the annotated statement unchanged;
+  `#[watch_input]` helper attribute, which cannot stand alone on a param);
+* `#[watch_input]` → the annotated parameter unchanged;
 * `watch_point!(…)` → `()`;
+* `watch_dep!("name", <expr>)` → the wrapped expression verbatim;
 * `#[derive(Watchable)]` → nothing (no impls, no registry statics).
 
 ## Layout exception
