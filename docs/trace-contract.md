@@ -11,6 +11,13 @@ constructs appear as examples. Annotation names are written bare (`watch_operati
 each producer spells them idiomatically (`#[watch_operation]`, `[WatchOperation]`).
 
 **Status:** adopting CTSC 0.1 (draft). Sequencing lives in `docs/roadmap.md`.
+The Rust emitter is implemented in the `artifact` crate: it serializes an
+in-memory capture (a caller-supplied `Resource` plus the runtime's
+`Vec<Span>`) to CTSC OTLP `TracesData` (`.otlp.json` / `.otlp.jsonl`). It emits
+the required resource attribute `conformance.version` = `"0.1.0"`, and a Rust
+panic wires as a `conformance.fault` whose `conformance.fault.type` is the
+language-neutral literal `"unexpected"` (chosen for cross-language comparability
+with the C# emitter).
 
 ## Artifacts
 

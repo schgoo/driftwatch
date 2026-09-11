@@ -39,6 +39,7 @@ pub fn op_attrs(component: &str, name: &str, inputs: &[(&str, Value)]) -> BTreeM
 pub fn obs(name: &str, value: impl ToValue) -> SpanEvent {
     SpanEvent {
         name: EventName::Observation,
+        time: 0,
         attributes: BTreeMap::from([
             (
                 "conformance.observation.name".to_string(),
@@ -56,6 +57,7 @@ pub fn obs(name: &str, value: impl ToValue) -> SpanEvent {
 pub fn result(value: impl ToValue) -> SpanEvent {
     SpanEvent {
         name: EventName::Result,
+        time: 0,
         attributes: BTreeMap::from([("conformance.result.value".to_string(), value.to_value())]),
     }
 }
@@ -64,6 +66,7 @@ pub fn result(value: impl ToValue) -> SpanEvent {
 pub fn empty() -> SpanEvent {
     SpanEvent {
         name: EventName::Empty,
+        time: 0,
         attributes: BTreeMap::new(),
     }
 }
@@ -72,6 +75,7 @@ pub fn empty() -> SpanEvent {
 pub fn error(name: &str, value: impl ToValue) -> SpanEvent {
     SpanEvent {
         name: EventName::Error,
+        time: 0,
         attributes: BTreeMap::from([
             (
                 "conformance.error.name".to_string(),
@@ -82,13 +86,19 @@ pub fn error(name: &str, value: impl ToValue) -> SpanEvent {
     }
 }
 
-/// A `conformance.fault` event (`fault.observer` + `fault.message`) for the
-/// panic-disposition path. The observer is always `"target"`; the message is the
-/// raw panic payload string.
+/// A `conformance.fault` event (`fault.type` + `fault.observer` +
+/// `fault.message`) for the panic-disposition path. The type is always
+/// `"unexpected"` (a Rust panic) and the observer always `"target"`; the message
+/// is the raw panic payload string.
 pub fn fault(observer: &str, message: &str) -> SpanEvent {
     SpanEvent {
         name: EventName::Fault,
+        time: 0,
         attributes: BTreeMap::from([
+            (
+                "conformance.fault.type".to_string(),
+                Value::String("unexpected".to_string()),
+            ),
             (
                 "conformance.fault.observer".to_string(),
                 Value::String(observer.to_string()),

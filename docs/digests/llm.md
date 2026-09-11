@@ -13,7 +13,7 @@ behavior — no hand-authored assertion to weaken.
 
 ## Current state
 
-- **Phase: 1 (emitter).** `rust/` workspace + crate scaffold exist (`runtime`, `annotations(-macros)`, `contract`, `extract`, `diff`, `cli`); the emitter crates are implemented through the annotation surface (#1-#4, #29-#30 merged). CTSC emission migration (#37 onward) is the active work.
+- **Phase: 1 (emitter).** `rust/` workspace + crate scaffold exist (`runtime`, `annotations(-macros)`, `artifact`, `contract`, `extract`, `diff`, `cli`); the emitter crates are implemented through the annotation surface (#1-#4, #29-#30 merged) and the CTSC OTLP artifact emitter (#11) serializes a capture to `.otlp.json`/`.otlp.jsonl`. CTSC emission migration (#37 onward) is the active work.
 - Migration plan: `docs/roadmap.md` (issue-numbered work items, phases 0–7).
 - Origin: clean-room reboot of SpecGate; lift the extraction half, drop the
   TDD/matcher half.
@@ -44,7 +44,7 @@ behavior — no hand-authored assertion to weaken.
 
 ## Decision boundaries (need a human owner)
 
-- Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — resolved via CTSC adoption.
+- Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — resolved via CTSC adoption; **implemented** in the `artifact` crate (#11). The `artifact` crate renders a `TraceCapture` (caller-supplied `Resource` + `Vec<runtime::Span>`) to a CTSC `TracesData`, emitting `conformance.version` = `"0.1.0"` and, on the panic-fault path, `conformance.fault.type` = `"unexpected"`.
 - Trace emission contract: **CTSC 0.1 producer profile** (docs/trace-contract.md); D1-D5 resolved. Observable shape + canonicalization owned there.
 - CLI surface (`snapshot` / `compare` / `--mode full|diff|pr`).
 
