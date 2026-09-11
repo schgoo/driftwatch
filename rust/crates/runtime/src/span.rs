@@ -19,14 +19,16 @@
 //!
 //! # Ids and timestamps
 //!
-//! `trace_id`, `span_id`, `start`, and `end` are minted from deterministic
-//! per-thread counters so goldens stay stable. Per CTSC Strict (comparison
-//! §7.9) these values are **never compared** across runs: `trace_id`/`span_id`
-//! establish nesting only, and `start`/`end` ticks establish sibling order and
-//! parent/child containment only. Two separate monotonic counters drive them —
-//! a span-id counter and a clock/tick counter that advances on every span open
-//! *and* close, so nested spans get strictly non-overlapping, properly ordered
-//! intervals (`parent.start < child.start < child.end < parent.end`).
+//! `trace_id`, `span_id`, `start`, `end`, and each event's `time` are minted
+//! from deterministic per-thread counters so goldens stay stable. Per CTSC
+//! Strict (comparison §7.9) these values are **never compared** across runs:
+//! `trace_id`/`span_id` establish nesting only, and `start`/`end`/`time` ticks
+//! establish sibling order and parent/child containment only. Two separate
+//! monotonic counters drive them — a span-id counter and a clock/tick counter
+//! that advances on every span open, span close, *and* event push, so nested
+//! spans get strictly non-overlapping, properly ordered intervals
+//! (`parent.start < child.start < child.end < parent.end`) and each event falls
+//! strictly inside its span (`span.start < event.time < span.end`).
 //!
 //! # Threading contract
 //!
@@ -123,7 +125,13 @@ pub enum SpanStatus {
 }
 
 /// One event recorded on a span, in emission order (CTSC trace §7.7).
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Equality is defined by hand over `name` + `attributes` only: `time` is a
+/// deterministic tick used for ordering/containment (`span.start < time <
+/// span.end`) and is **never compared** across runs (mirrors [`Span`]'s
+/// `start`/`end`), so two events with the same name and attributes are equal
+/// regardless of when they were stamped.
+#[derive(Debug, Clone)]
 #[expect(
     clippy::exhaustive_structs,
     reason = "constructed field-by-field by macro-generated code (like `OpMeta`); pinning every field is intentional"
@@ -131,9 +139,22 @@ pub enum SpanStatus {
 pub struct SpanEvent {
     /// The CTSC event name.
     pub name: EventName,
+    /// Monotonic emission tick, stamped by [`push_event`]. Ordering/containment
+    /// only; never compared across runs, and excluded from equality.
+    pub time: u64,
     /// The event's attributes (e.g. `conformance.observation.value`).
     pub attributes: BTreeMap<String, Value>,
 }
+
+impl PartialEq for SpanEvent {
+    /// Compares `name` + `attributes` only; `time` is a deterministic tick and
+    /// is deliberately excluded (see the type docs).
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.attributes == other.attributes
+    }
+}
+
+impl Eq for SpanEvent {}
 
 /// One OTLP-shaped span in a capture (CTSC trace §6).
 ///
@@ -381,15 +402,19 @@ pub fn push_error(name: String, value: Value) {
     push_event(EventName::Error, attrs);
 }
 
-/// Push a `conformance.fault` event (`fault.observer` + `fault.message`) onto
-/// the current span, recording an unexpected failure (e.g. a Rust `panic!`).
+/// Push a `conformance.fault` event (`fault.type` + `fault.observer` +
+/// `fault.message`) onto the current span, recording an unexpected failure
+/// (e.g. a Rust `panic!`).
 ///
-/// The `observer` names who caught the fault (the producer choice is always
-/// `"target"`); the `message` is the raw, verbatim panic payload string. This
-/// helper owns the `conformance.fault.*` key strings so macro-generated code
-/// never spells them inline.
-pub fn push_fault(observer: &str, message: String) {
+/// `fault_type` is a language-neutral identifier (Rust panics use
+/// `"unexpected"`); `observer` names who caught it (always `"target"`);
+/// `message` is the raw panic payload.
+pub fn push_fault(fault_type: &str, observer: &str, message: String) {
     let mut attrs = BTreeMap::new();
+    attrs.insert(
+        "conformance.fault.type".to_string(),
+        Value::String(fault_type.to_string()),
+    );
     attrs.insert(
         "conformance.fault.observer".to_string(),
         Value::String(observer.to_string()),
@@ -416,18 +441,26 @@ pub fn set_status(status: SpanStatus) {
     });
 }
 
-/// Append a [`SpanEvent`] to the current (stack-top) span, in emission order.
+/// Append a [`SpanEvent`] to the current (stack-top) span, in emission order,
+/// stamping it with the next clock tick (so `span.start < event.time <
+/// span.end`).
 ///
 /// If no span is open this is a caller error; the event is silently dropped
-/// rather than panicking, since a stray emission outside any span has nowhere to
-/// land (a bare `watch_point!` outside an operation emits nothing).
+/// rather than panicking (and no tick is consumed), since a stray emission
+/// outside any span has nowhere to land (a bare `watch_point!` outside an
+/// operation emits nothing).
 pub fn push_event(name: EventName, attributes: BTreeMap<String, Value>) {
     let Some(index) = STACK.with(|s| s.borrow().last().map(|f| f.buffer_index)) else {
         return;
     };
+    let time = next_tick();
     SPANS.with(|b| {
         if let Some(span) = b.borrow_mut().get_mut(index) {
-            span.events.push(SpanEvent { name, attributes });
+            span.events.push(SpanEvent {
+                name,
+                time,
+                attributes,
+            });
         }
     });
 }
@@ -658,12 +691,16 @@ mod tests {
     fn push_fault_owns_the_fault_keys() {
         reset();
         let g = open_span(SpanName::Operation, BTreeMap::new());
-        push_fault("target", "boom".to_string());
+        push_fault("unexpected", "target", "boom".to_string());
         drop(g);
         let spans = take_spans();
         assert_eq!(spans[0].events.len(), 1);
         let event = &spans[0].events[0];
         assert_eq!(event.name, EventName::Fault);
+        assert_eq!(
+            event.attributes.get("conformance.fault.type"),
+            Some(&Value::String("unexpected".to_string()))
+        );
         assert_eq!(
             event.attributes.get("conformance.fault.observer"),
             Some(&Value::String("target".to_string()))
@@ -672,5 +709,35 @@ mod tests {
             event.attributes.get("conformance.fault.message"),
             Some(&Value::String("boom".to_string()))
         );
+    }
+
+    #[test]
+    fn event_time_brackets_between_span_start_and_end() {
+        reset();
+        let g = open_span(SpanName::Operation, BTreeMap::new());
+        push_event(EventName::Observation, BTreeMap::new());
+        drop(g);
+        let spans = take_spans();
+        let span = &spans[0];
+        let event = &span.events[0];
+        assert!(
+            span.start < event.time && event.time < span.end.expect("closed on drop"),
+            "event tick must fall strictly inside its span"
+        );
+    }
+
+    #[test]
+    fn event_equality_ignores_time() {
+        let a = SpanEvent {
+            name: EventName::Observation,
+            time: 3,
+            attributes: BTreeMap::new(),
+        };
+        let b = SpanEvent {
+            name: EventName::Observation,
+            time: 99,
+            attributes: BTreeMap::new(),
+        };
+        assert_eq!(a, b);
     }
 }

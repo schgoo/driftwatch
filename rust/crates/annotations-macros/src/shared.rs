@@ -273,7 +273,7 @@ pub fn fault_arm() -> TokenStream2 {
                 ::std::string::String::from("<non-string panic payload>")
             };
             #rt::set_status(#rt::SpanStatus::Error);
-            #rt::push_fault("target", __dw_msg);
+            #rt::push_fault("unexpected", "target", __dw_msg);
             ::std::panic::resume_unwind(__dw_payload)
         }
     }

@@ -38,6 +38,7 @@ deny:
 readme:
     cd rust && cargo doc2readme -p annotations --lib --template crates/README.j2 --out crates/annotations/README.md
     cd rust && cargo doc2readme -p annotations-macros --lib --template crates/README.j2 --out crates/annotations-macros/README.md
+    cd rust && cargo doc2readme -p artifact --lib --template crates/README.j2 --out crates/artifact/README.md
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md
     cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md
@@ -47,6 +48,7 @@ readme:
 readme-check:
     cd rust && cargo doc2readme -p annotations --lib --template crates/README.j2 --out crates/annotations/README.md --check
     cd rust && cargo doc2readme -p annotations-macros --lib --template crates/README.j2 --out crates/annotations-macros/README.md --check
+    cd rust && cargo doc2readme -p artifact --lib --template crates/README.j2 --out crates/artifact/README.md --check
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md --check
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md --check
     cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md --check

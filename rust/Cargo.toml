@@ -65,10 +65,6 @@ multiple_crate_versions = "allow"
 # metadata (readme/keywords/categories) is not required.
 cargo_common_metadata = "allow"
 
-# Shared dependencies are declared here; member crates opt in with
-# `{crate}.workspace = true`. Serialization dependencies are intentionally
-# absent until the artifact format is chosen (see the artifact-format issue) —
-# the runtime defines only in-memory trace types.
 [workspace.dependencies]
 # Link-time distributed slices: the runtime's operation/type registry is
 # populated across compilation units and iterated by discovery.
@@ -80,5 +76,5 @@ proc-macro2 = "1"
 # Internal crates wired together by the annotation facade.
 runtime = { path = "crates/runtime" }
 annotations-macros = { path = "crates/annotations-macros" }
-# JSON parsing in tests (validating the discovery envelope is well-formed).
+# JSON assembly for the artifact emitter; also parses discovery output in tests.
 serde_json = "1"
