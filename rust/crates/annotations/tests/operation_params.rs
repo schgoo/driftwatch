@@ -21,7 +21,7 @@ fn scaled(n: i64, factor: i64) -> i64 {
 
 #[cfg_attr(
     not(feature = "trace"),
-    allow(
+    expect(
         clippy::needless_pass_by_value,
         reason = "identity (trace-off) form borrows `name`; the shape exercises a renamed String param"
     )
@@ -49,7 +49,7 @@ fn bump(c: &mut Counter) {
 
 #[cfg_attr(
     not(feature = "trace"),
-    allow(
+    expect(
         clippy::trivially_copy_pass_by_ref,
         reason = "the `&i64` shape is deliberate: it exercises shared-ref param emission"
     )
@@ -64,7 +64,7 @@ struct Widget;
 impl Widget {
     #[cfg_attr(
         not(feature = "trace"),
-        allow(
+        expect(
             clippy::unused_self,
             reason = "the receiver is deliberately unused: it exercises receiver exclusion"
         )

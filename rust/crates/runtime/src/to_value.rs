@@ -44,22 +44,14 @@ impl ToValue for isize {
 }
 
 impl ToValue for u64 {
-    #[expect(
-        clippy::cast_possible_wrap,
-        reason = "values above i64::MAX are not expected in captures; wrap is accepted for the canonical i64 lattice"
-    )]
     fn to_value(&self) -> Value {
-        Value::Integer(*self as i64)
+        Value::Integer(i64::try_from(*self).unwrap_or(i64::MAX))
     }
 }
 
 impl ToValue for usize {
-    #[expect(
-        clippy::cast_possible_wrap,
-        reason = "values above i64::MAX are not expected in captures; wrap is accepted for the canonical i64 lattice"
-    )]
     fn to_value(&self) -> Value {
-        Value::Integer(*self as i64)
+        Value::Integer(i64::try_from(*self).unwrap_or(i64::MAX))
     }
 }
 
@@ -201,7 +193,8 @@ mod tests {
     #[test]
     fn unsigned_boundaries() {
         assert_eq!(u32::MAX.to_value(), Value::Integer(i64::from(u32::MAX)));
-        assert_eq!(u64::MAX.to_value(), Value::Integer(-1));
+        // Values above i64::MAX saturate to i64::MAX (canonical i64 lattice).
+        assert_eq!(u64::MAX.to_value(), Value::Integer(i64::MAX));
     }
 
     #[test]

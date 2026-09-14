@@ -21,14 +21,6 @@
 //! - `watch_point!(…)` → `()`;
 //! - `watch_dep!("name", <expr>)` → the wrapped expression verbatim;
 //! - `#[derive(Watchable)]` → nothing (no impls, no registry statics).
-//!
-//! # Layout exception
-//!
-//! A `proc-macro` crate must declare its `#[proc_macro*]` entry points at the
-//! crate root, so — unlike the workspace's other crates — this `lib.rs` carries
-//! the thin entry functions in addition to module declarations. The real
-//! expansion logic lives in the concern-scoped sibling modules; each entry point
-//! is a thin, feature-gated delegate.
 
 // The expansion logic is only reachable with the `trace` feature; gating the
 // modules keeps a `--no-default-features` build free of dead code. The `dep`

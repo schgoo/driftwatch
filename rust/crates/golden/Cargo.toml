@@ -1,0 +1,23 @@
+[package]
+name = "golden"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Driftwatch golden trace corpus: reusable annotated fixture operations that back the byte-exact CTSC goldens."
+
+[dependencies]
+annotations.workspace = true
+artifact.workspace = true
+
+[features]
+# Off by default: a plain build expands the annotations to identity, so the
+# fixture operations compile and emit nothing (and the goldens are skipped).
+# Enabling `trace` turns on emission — this is what drives the goldens.
+default = []
+trace = ["annotations/trace"]
+
+[lints]
+workspace = true

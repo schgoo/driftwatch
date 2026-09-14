@@ -19,10 +19,6 @@ use std::collections::{BTreeMap, BTreeSet};
 /// assert_ne!(Value::Integer(5), Value::Float(5.0));
 /// ```
 #[derive(Debug, Clone)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "core value lattice; a new variant must force exhaustive handling in every crate that matches it"
-)]
 pub enum Value {
     /// A UTF-8 string.
     String(String),

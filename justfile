@@ -42,6 +42,7 @@ readme:
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md
     cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md
+    cd rust && cargo doc2readme -p golden --lib --template crates/README.j2 --out crates/golden/README.md
     cd rust && cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md
 
 # Verify per-crate READMEs are in sync with lib docs.
@@ -52,6 +53,7 @@ readme-check:
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md --check
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md --check
     cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md --check
+    cd rust && cargo doc2readme -p golden --lib --template crates/README.j2 --out crates/golden/README.md --check
     cd rust && cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md --check
 
 # Measure workspace test coverage (cargo-llvm-cov); fails under the line floor.

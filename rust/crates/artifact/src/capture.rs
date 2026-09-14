@@ -8,10 +8,6 @@ use crate::resource::Resource;
 /// One in-memory capture: the caller-supplied [`Resource`] descriptor plus the
 /// drained span tree from the runtime buffer ([`runtime::take_spans`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "a caller-constructed capture; both fields are part of the stable surface"
-)]
 pub struct TraceCapture {
     /// The CTSC resource attributes (tool + target identity).
     pub resource: Resource,

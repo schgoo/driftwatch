@@ -252,7 +252,7 @@ pub fn param_name(p: &Param) -> String {
 /// 2. sets the current (stack-top) span's status to `Error`;
 /// 3. records a `conformance.fault` observed by `"target"` carrying the message;
 /// 4. re-raises the panic with `resume_unwind`, so it propagates to (and faults)
-///    every enclosing watched frame — the ratified cascade.
+///    every enclosing watched frame.
 ///
 /// The trailing `resume_unwind` diverges (`!`), so the block unifies with any
 /// surrounding expression's type. All `conformance.*` keys are owned by the

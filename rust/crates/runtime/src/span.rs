@@ -45,10 +45,6 @@ use crate::Value;
 /// The closed set of CTSC span names. Maps to the fixed `conformance.*` span
 /// names (CTSC trace §6); the domain name is an attribute, not the span name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "the closed CTSC span vocabulary; adding a name is a deliberate format change that must be handled everywhere"
-)]
 pub enum SpanName {
     /// One target invocation, e.g. a `cargo test` run (`conformance.run`).
     Run,
@@ -74,10 +70,6 @@ impl SpanName {
 /// The closed set of CTSC event names (CTSC trace §7). Maps to the fixed
 /// `conformance.*` event names that may repeat within an operation span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "the closed CTSC event vocabulary; adding a name is a deliberate format change that must be handled everywhere"
-)]
 pub enum EventName {
     /// A body echo / `watch_point` / field-mutation echo (`conformance.observation`).
     Observation,
@@ -111,10 +103,6 @@ impl EventName {
 /// #11). The panic-disposition path sets `Error` alongside the
 /// `conformance.fault` event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(
-    clippy::exhaustive_enums,
-    reason = "the closed OTLP StatusCode vocabulary; adding a status is a deliberate format change that must be handled everywhere"
-)]
 pub enum SpanStatus {
     /// The default at span open (OTLP `STATUS_CODE_UNSET` = 0).
     Unset,
@@ -132,10 +120,6 @@ pub enum SpanStatus {
 /// `start`/`end`), so two events with the same name and attributes are equal
 /// regardless of when they were stamped.
 #[derive(Debug, Clone)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "constructed field-by-field by macro-generated code (like `OpMeta`); pinning every field is intentional"
-)]
 pub struct SpanEvent {
     /// The CTSC event name.
     pub name: EventName,
@@ -162,10 +146,6 @@ impl Eq for SpanEvent {}
 /// they are never compared across runs (see the module docs). The `Debug`
 /// output is a trust-anchor oracle, and equality is strict and structural.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "constructed field-by-field by macro-generated code (like `OpMeta`); pinning every field is intentional"
-)]
 pub struct Span {
     /// OTLP-native trace id, shared by every span in one capture. Nesting only;
     /// never compared across runs.
@@ -394,12 +374,16 @@ pub fn push_empty() {
 }
 
 /// Push a `conformance.error` completion event (`error.name` + `error.value`)
-/// onto the current span.
+/// onto the current span and set its `status = Error`.
+///
+/// A declared error is an error outcome, which CTSC requires the span status to
+/// reflect (mirroring the fault path).
 pub fn push_error(name: String, value: Value) {
     let mut attrs = BTreeMap::new();
     attrs.insert("conformance.error.name".to_string(), Value::String(name));
     attrs.insert("conformance.error.value".to_string(), value);
     push_event(EventName::Error, attrs);
+    set_status(SpanStatus::Error);
 }
 
 /// Push a `conformance.fault` event (`fault.type` + `fault.observer` +

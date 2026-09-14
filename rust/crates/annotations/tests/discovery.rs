@@ -12,7 +12,7 @@ use annotations::watch_operation;
 
 #[cfg_attr(
     not(feature = "trace"),
-    allow(
+    expect(
         clippy::needless_pass_by_value,
         reason = "identity (trace-off) form only borrows `b`; the shape exercises a String param"
     )

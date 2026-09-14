@@ -16,7 +16,7 @@
 //!   read);
 //! - runs the real call inside `catch_unwind` (sync) / `catch_unwind_fut`
 //!   (async), so a panic is dispositioned as a `conformance.fault` on the dep
-//!   span and re-propagated (the ratified Option A cascade);
+//!   span and re-propagated (the panic surfaces unchanged to the caller);
 //! - dispositions the returned value through the runtime `DepObserve` ladder
 //!   (`Ok`/`Some`→`result`, `Err`→`error`, `None`→`empty`) *before* handing it
 //!   back, so an `Err` is recorded even though the caller's `?` unwraps outside;
@@ -45,7 +45,7 @@ use syn::{Expr, LitStr, Token, parse_macro_input};
 /// expression is the wrapped call.
 #[cfg_attr(
     not(feature = "trace"),
-    allow(
+    expect(
         dead_code,
         reason = "name/component are read only by the trace-on expansion; the identity path uses only `expr`"
     )

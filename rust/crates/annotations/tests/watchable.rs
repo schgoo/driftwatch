@@ -16,11 +16,10 @@ struct User {
     id: i64,
     #[watchable(name = "display")]
     name: String,
-    #[allow(
-        dead_code,
-        reason = "untagged field is intentionally excluded from the watch surface"
-    )]
-    secret: String,
+    // Untagged: intentionally excluded from the watch surface. The `_` prefix
+    // both documents the exclusion and satisfies `dead_code` without a
+    // suppression (the derive keys on `#[watchable]`, not the field name).
+    _secret: String,
 }
 
 #[derive(Watchable)]
@@ -29,7 +28,7 @@ enum Status {
     Named {
         label: String,
     },
-    #[allow(
+    #[expect(
         dead_code,
         reason = "tuple payload exercises the tuple-variant arm; its value is not read"
     )]
@@ -50,7 +49,7 @@ fn struct_to_value_uses_only_tagged_fields_with_renames() {
     let u = User {
         id: 7,
         name: "ada".to_string(),
-        secret: "shh".to_string(),
+        _secret: "shh".to_string(),
     };
     assert_eq!(
         u.to_value(),
