@@ -60,5 +60,7 @@ readme-check:
 coverage:
     cd rust && cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 85
 
-# Full pre-PR gate: build, test, clippy, format, evaluate, licenses, and READMEs.
-check: build test clippy format-check evaluate deny readme-check
+# Full pre-PR gate: build, test, clippy, format, licenses, READMEs, and evaluate.
+# `evaluate` runs last: it is not a CI gate (unavailable on hosted runners), so a
+# known-baseline evaluate finding must not short-circuit the CI-gating checks.
+check: build test clippy format-check deny readme-check evaluate
