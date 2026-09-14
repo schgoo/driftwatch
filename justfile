@@ -42,6 +42,7 @@ readme:
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md
     cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md
+    cd rust && cargo doc2readme -p golden --lib --template crates/README.j2 --out crates/golden/README.md
     cd rust && cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md
 
 # Verify per-crate READMEs are in sync with lib docs.
@@ -52,11 +53,14 @@ readme-check:
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md --check
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md --check
     cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md --check
+    cd rust && cargo doc2readme -p golden --lib --template crates/README.j2 --out crates/golden/README.md --check
     cd rust && cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md --check
 
 # Measure workspace test coverage (cargo-llvm-cov); fails under the line floor.
 coverage:
     cd rust && cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 85
 
-# Full pre-PR gate: build, test, clippy, format, evaluate, licenses, and READMEs.
-check: build test clippy format-check evaluate deny readme-check
+# Full pre-PR gate: build, test, clippy, format, licenses, READMEs, and evaluate.
+# `evaluate` runs last: it is not a CI gate (unavailable on hosted runners), so a
+# known-baseline evaluate finding must not short-circuit the CI-gating checks.
+check: build test clippy format-check deny readme-check evaluate

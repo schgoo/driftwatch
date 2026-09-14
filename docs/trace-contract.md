@@ -71,6 +71,10 @@ else positional); its receiver is excluded.
 Nested outcome types peel to their disposition — e.g. Rust `Result<Option<T>, E>`:
 `Ok(Some)`=result, `Ok(None)`=empty, `Err`=error.
 
+**Error status.** A `conformance.error` (declared error) sets the span's
+`status = Error` — an error is an error outcome. Result/empty/observation
+outcomes leave status `OK`.
+
 **Fault propagation.** A panic emits a `conformance.fault` at *every enclosing
 watched frame* (the operation and each enclosing dep), each with span
 `status = Error` and no completion event, then re-propagates; the comparator may

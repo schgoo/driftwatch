@@ -8,7 +8,7 @@
 //!   op records its own `result`;
 //! - `Err`: child `conformance.error` (fallback name), then `?` propagates and
 //!   the op records a structural `error`;
-//! - panic: the ratified Option A cascade — a `conformance.fault` on the dep
+//! - panic: a `conformance.fault` on the dep
 //!   span and the op span, both status `Error`, no completion.
 
 mod common;

@@ -23,7 +23,7 @@
 
 mod common;
 
-use annotations::{SpanName, Value, reset, take_spans, watch_dep, watch_operation};
+use annotations::{SpanName, SpanStatus, Value, reset, take_spans, watch_dep, watch_operation};
 use common::{empty, error, op_attrs, result};
 
 #[watch_operation(component = "annotations")]
@@ -130,6 +130,9 @@ fn dep_err_with_outside_try_records_child_error_then_op_error() {
     // records its own structural error (fallback name = last segment of `E`).
     assert_eq!(child.events, vec![error("error", dep_err.clone())]);
     assert_eq!(parent.events, vec![error("ParseIntError", dep_err)]);
+    // Both frames record an error outcome, so both carry Error status.
+    assert_eq!(child.status, SpanStatus::Error);
+    assert_eq!(parent.status, SpanStatus::Error);
 }
 
 #[test]

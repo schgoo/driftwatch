@@ -11,13 +11,13 @@
 
 mod common;
 
-use annotations::{SpanName, Value, Watchable, reset, take_spans, watch_operation};
+use annotations::{SpanName, SpanStatus, Value, Watchable, reset, take_spans, watch_operation};
 use common::{empty, error, op_attrs, result};
 use std::collections::BTreeMap;
 
 #[cfg_attr(
     not(feature = "trace"),
-    allow(
+    expect(
         clippy::needless_pass_by_value,
         reason = "identity (trace-off) form borrows `msg`; the shape exercises a unit-return op with a value param"
     )
@@ -58,10 +58,6 @@ fn maybe_positive(n: i64) -> Result<Option<i64>, String> {
 
 /// A `#[derive(Watchable)]` error enum: its `ToValue` decomposition drives the
 /// per-variant `conformance.error.name` (variant tag) + payload value.
-#[cfg_attr(
-    not(feature = "trace"),
-    allow(dead_code, reason = "constructed only on-trace")
-)]
 #[derive(Watchable, Debug, PartialEq)]
 enum ApiError {
     NotFound,
@@ -81,7 +77,7 @@ fn lookup(id: i64) -> Result<i64, ApiError> {
 
 #[cfg_attr(
     not(feature = "trace"),
-    allow(
+    expect(
         clippy::unused_async,
         reason = "identity (trace-off) form has no await; the traced form wraps the body in an awaited async block"
     )
@@ -159,6 +155,8 @@ fn result_err_decomposes_to_error_event() {
     let spans = take_spans();
     // name = fallback (last segment of E = `String`); value = the Display string.
     assert_eq!(spans[0].events, vec![error("String", "divide by zero")]);
+    // A declared error is an error outcome: the span status reflects it.
+    assert_eq!(spans[0].status, SpanStatus::Error);
 }
 
 #[test]

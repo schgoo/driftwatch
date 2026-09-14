@@ -7,19 +7,13 @@
 //! extraction driver reads to derive a contract from annotated code.
 //!
 //! [`discovery_json`] produces an internal, dependency-free discovery handoff
-//! consumed by the separate contract-extraction driver — it is NOT the persisted
-//! capture artifact format (that remains deferred to issue #11), and whether the
-//! driver consumes serialized JSON or reads the `&'static` metadata in-process is
-//! a consumer-side decision for the extraction driver (issue #10).
+//! consumed by the separate contract-extraction driver. It is distinct from the
+//! persisted capture artifact format.
 
 use std::fmt::Write as _;
 
 /// Metadata about one annotated operation or setup.
 #[derive(Debug, Clone, Copy)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "constructed field-by-field by external macro-generated code, which pins every field"
-)]
 pub struct OpMeta {
     /// The operation name (its spec identity).
     pub name: &'static str,
@@ -51,10 +45,6 @@ pub type FieldMeta = (&'static str, &'static str);
 /// One enum variant: its name plus any named fields. Tuple and unit variants
 /// carry an empty field list (schema extraction maps them to `{}`).
 #[derive(Debug, Clone, Copy)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "constructed field-by-field by external macro-generated code, which pins every field"
-)]
 pub struct VariantMeta {
     /// The variant name.
     pub name: &'static str,
@@ -68,10 +58,6 @@ pub struct VariantMeta {
 /// `#[watchable]`-tagged fields, honoring `#[watchable(name = "…")]`); enums
 /// populate `variants`.
 #[derive(Debug, Clone, Copy)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "constructed field-by-field by external macro-generated code, which pins every field"
-)]
 pub struct TypeMeta {
     /// The type name.
     pub name: &'static str,

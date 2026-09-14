@@ -17,17 +17,13 @@ pub struct BodyInstrumenter {
 }
 
 impl VisitMut for BodyInstrumenter {
-    #[allow(
-        clippy::renamed_function_params,
-        reason = "descriptive name for the visited block"
-    )]
-    fn visit_block_mut(&mut self, block: &mut Block) {
+    fn visit_block_mut(&mut self, i: &mut Block) {
         // Recurse into nested blocks first.
-        for stmt in &mut block.stmts {
+        for stmt in &mut i.stmts {
             syn::visit_mut::visit_stmt_mut(self, stmt);
         }
 
-        let original = std::mem::take(&mut block.stmts);
+        let original = std::mem::take(&mut i.stmts);
         let mut new: Vec<Stmt> = Vec::with_capacity(original.len());
 
         for stmt in original {
@@ -38,7 +34,7 @@ impl VisitMut for BodyInstrumenter {
             }
         }
 
-        block.stmts = new;
+        i.stmts = new;
     }
 }
 

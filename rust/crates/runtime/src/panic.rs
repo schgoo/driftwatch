@@ -73,7 +73,11 @@ mod tests {
     fn async_catch_unwind_fut_reports_a_panic_as_err() {
         #[expect(
             clippy::unused_async,
-            reason = "an async future that panics on first poll; awaited via catch_unwind_fut"
+            reason = "must be an `async fn` (not an `async {}` block) to give \
+                      catch_unwind_fut a concrete `Output = i64`; a block would \
+                      infer `Output = !`, which is not Debug on stable and breaks \
+                      the `expect_err` below. It panics on first poll, so it has \
+                      no `.await`"
         )]
         async fn boom() -> i64 {
             panic!("async boom")

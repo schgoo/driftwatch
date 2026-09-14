@@ -43,10 +43,6 @@ use crate::{ToValue, Value, push_empty, push_error, push_result, split_error};
 
 /// Wrapper around a borrowed observed value that drives the disposition ladder.
 #[derive(Debug)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "a one-field newtype wrapper the watch_dep! macro constructs directly"
-)]
 pub struct DepObserve<'a, T: ?Sized>(
     /// The borrowed value whose disposition is observed.
     pub &'a T,
@@ -188,9 +184,12 @@ impl<T: ?Sized> DepObserveOther for DepObserve<'_, T> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(
+    #![expect(
         clippy::needless_borrow,
-        reason = "uniform autoref-specialization call site mirrors macro output"
+        reason = "the leading `&` count is load-bearing: it drives the autoref-\
+                  specialization ladder (Result/Option/ToValue/Display/Debug/Other) \
+                  exactly as the macro-generated call site does; clippy cannot see \
+                  that the borrow depth selects the impl"
     )]
 
     use super::*;
@@ -292,7 +291,10 @@ mod tests {
     fn structural_non_to_value_falls_back_to_debug() {
         #[derive(Debug)]
         struct Opaque {
-            #[expect(dead_code, reason = "read only via the derived Debug formatter")]
+            #[expect(
+                dead_code,
+                reason = "the value is asserted via the derived `Debug` string in this test; clippy does not count `derive(Debug)` reads, and a `_`-prefix would corrupt the Debug output being checked"
+            )]
             code: u32,
         }
         let ev = one_event(|| {
@@ -313,7 +315,10 @@ mod tests {
     fn result_debug_floor_keeps_ok_err_disposition() {
         #[derive(Debug)]
         struct Opaque {
-            #[expect(dead_code, reason = "read only via the derived Debug formatter")]
+            #[expect(
+                dead_code,
+                reason = "the value is asserted via the derived `Debug` string in this test; clippy does not count `derive(Debug)` reads, and a `_`-prefix would corrupt the Debug output being checked"
+            )]
             code: u32,
         }
 
@@ -348,7 +353,10 @@ mod tests {
     fn option_debug_floor_keeps_some_none_disposition() {
         #[derive(Debug)]
         struct Opaque {
-            #[expect(dead_code, reason = "read only via the derived Debug formatter")]
+            #[expect(
+                dead_code,
+                reason = "the value is asserted via the derived `Debug` string in this test; clippy does not count `derive(Debug)` reads, and a `_`-prefix would corrupt the Debug output being checked"
+            )]
             code: u32,
         }
 

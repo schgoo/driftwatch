@@ -23,10 +23,6 @@ use crate::{ToValue, Value};
 
 /// Wrapper around a borrowed value that drives the encoding ladder.
 #[derive(Debug)]
-#[expect(
-    clippy::exhaustive_structs,
-    reason = "a one-field newtype wrapper the emit macros construct directly"
-)]
 pub struct ValueEmit<'a, T: ?Sized>(
     /// The borrowed value to encode.
     pub &'a T,
@@ -98,9 +94,12 @@ pub fn split_error(value: Value, fallback: &str) -> (String, Value) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(
+    #![expect(
         clippy::needless_borrow,
-        reason = "uniform autoref-specialization call site mirrors macro output"
+        reason = "the leading `&` count is load-bearing: it drives the autoref-\
+                  specialization ladder (ToValue/Display/Debug/type-name) exactly \
+                  as the macro-generated call site does; clippy cannot see that \
+                  the borrow depth selects the impl"
     )]
 
     use super::*;
@@ -125,7 +124,10 @@ mod tests {
     /// `Debug`-only — Level 3.
     #[derive(Debug)]
     struct DebugOnly {
-        #[expect(dead_code, reason = "read only via the derived Debug formatter")]
+        #[expect(
+            dead_code,
+            reason = "the value is asserted via the derived `Debug` string in this test; clippy does not count `derive(Debug)` reads, and a `_`-prefix would corrupt the Debug output being checked"
+        )]
         code: u32,
     }
 

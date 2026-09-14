@@ -192,7 +192,7 @@ fn non_string_panic_payload_falls_back() {
 }
 
 // ---------------------------------------------------------------------------
-// Nested-dep panic cascade — ratified Option A.
+// Nested-dep panic cascade.
 // ---------------------------------------------------------------------------
 
 /// An unannotated dependency that panics on bad input. Returns `Result` because
@@ -215,7 +215,7 @@ fn cascade_outer(n: i64) -> Result<i64, String> {
 #[test]
 #[cfg_attr(not(feature = "trace"), ignore = "requires the `trace` feature")]
 fn nested_dep_panic_cascades_a_fault_to_every_enclosing_frame() {
-    // Pins ratified Option A: a panic faults every enclosing watched frame
+    // A panic faults every enclosing watched frame
     // (the operation AND each enclosing dep), each with status Error and no
     // completion event.
     reset();

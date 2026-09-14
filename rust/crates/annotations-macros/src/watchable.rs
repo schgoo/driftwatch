@@ -227,10 +227,6 @@ fn expand_enum(
 
 /// Build the `DRIFTWATCH_TYPES` registration for a `Watchable` type, wrapped in
 /// a named `const` so it compiles wherever the type is declared.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "one registration site; splitting would obscure the flat metadata"
-)]
 fn register_type_meta(
     name_str: &str,
     name: &Ident,
