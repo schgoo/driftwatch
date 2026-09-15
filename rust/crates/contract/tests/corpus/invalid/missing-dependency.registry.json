@@ -1,0 +1,35 @@
+{
+  "format": "ctsc.registry",
+  "formatVersion": "0.2.0",
+  "registryId": "urn:ctsc:registry:invalid.missing-dependency:1",
+  "version": "1.0.0",
+  "imports": [
+    {
+      "registryId": "urn:ctsc:registry:example.tax:1",
+      "version": "1.0.0",
+      "digest": "sha256:97628c2ba5e8c661268d8adf3cb06a6950af7f38b12153f283e2adce39e95d13",
+      "uri": "file:../../valid/imports/tax.registry.json"
+    }
+  ],
+  "components": [
+    {
+      "id": "invalid.missing-dependency",
+      "operations": [
+        {
+          "name": "calculate_tax",
+          "inputs": [],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "named",
+              "registryId": "urn:ctsc:registry:example.tax:1",
+              "componentId": "example.tax",
+              "name": "TaxAmount"
+            }
+          }
+        }
+      ],
+      "types": []
+    }
+  ]
+}

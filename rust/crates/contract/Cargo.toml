@@ -6,7 +6,11 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Driftwatch contract: parse and validate .contract.yaml (types, operations, bindings)."
+description = "Driftwatch contract: parse and validate the CTSC Registry 0.1 document (ctsc.registry)."
 
 [lints]
 workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
