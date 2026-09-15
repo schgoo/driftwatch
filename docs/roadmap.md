@@ -187,6 +187,15 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
   artifact is `*.registry.json`, not the pre-CTSC `.contract.yaml`. Import-file
   loading + sha256 digest verification + cross-document type resolution (§6) are
   deferred to a linked-validation follow-up. ⚠ ~450
+- **#6.1** *(deferred; lower priority than the extraction chain)* — **linked
+  (multi-document) registries**: import loading, `sha256:` digest verification,
+  and cross-document named-type resolution (CTSC §6, §8 imported branch). Single
+  `discover` output is one self-contained document, so nothing on #6–#15 emits
+  imports; this only matters once a capture references a *separately-captured*
+  dependency registry. **Open question first:** what comparison features does
+  registry linking actually buy (e.g. detecting drift in a pinned dependency's
+  contract via digest, cross-version type-identity)? Scope it against Phase 5
+  diff value before building. ✚
 
 ### Phase 3 — extraction driver (drop the matcher)
 - **#7** — binding resolution (drop matcher bits). ▪ ~350
