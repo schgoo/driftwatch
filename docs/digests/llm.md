@@ -13,7 +13,7 @@ behavior — no hand-authored assertion to weaken.
 
 ## Current state
 
-- **Phase: 1 (emitter).** `rust/` workspace + crate scaffold exist (`runtime`, `annotations(-macros)`, `artifact`, `contract`, `extract`, `diff`, `cli`); the emitter crates are implemented through the annotation surface (#1-#4, #29-#30 merged) and the CTSC OTLP artifact emitter (#11) serializes a capture to `.otlp.json`/`.otlp.jsonl`. CTSC emission migration (#37 onward) is the active work.
+- **Phase: 1 (emitter).** `rust/` workspace + crate scaffold exist (`runtime`, `annotations(-macros)`, `artifact`, `contract`, `extract`, `diff`, `cli`); the emitter crates are implemented through the annotation surface (#1-#4, #29-#30 merged), CTSC emission (#37-#40) is complete, and the CTSC OTLP artifact emitter (#11) serializes a capture to `.otlp.json`/`.otlp.jsonl`. The trace golden corpus (#5) is the trust anchor, and mutation testing (#24, `just mutants`) validated it at 0 survivors.
 - Migration plan: `docs/roadmap.md` (issue-numbered work items, phases 0–7).
 - Origin: clean-room reboot of SpecGate; lift the extraction half, drop the
   TDD/matcher half.
@@ -61,3 +61,12 @@ human-enforced convention (see `AGENTS.md`).
 
 Every PR passes `cargo test` + `cargo evaluate` + `cargo clippy -D warnings` +
 `cargo fmt --check`. `cargo evaluate` is a merge gate, not advisory.
+
+`just mutants` runs a HYBRID mutation gate that measures the emitter trust
+anchor: `cargo-gamma` (config `rust/gamma.toml`) mutates the `runtime` emitter
+and `cargo-mutants` (config `rust/.cargo/mutants.toml`) mutates the
+`annotations(-macros)` proc-macros gamma cannot reach; both require the runtime
+encoder tests + trace goldens to kill every viable mutant. A survivor is a gap
+in the goldens — add a golden. On-demand, not a per-PR gate (slow). Baseline
+(#24): runtime = 206 mutants → 206 killed, 0 survived, 0 uncovered (100.0%),
+`registry.rs` excluded pending its contract oracle (#6/#10).

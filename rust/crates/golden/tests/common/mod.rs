@@ -96,11 +96,20 @@ fn pin(mut spans: Vec<Span>, index: u8) -> Vec<Span> {
     spans
 }
 
-/// Resolve `tests/golden/<name>` at the repository root from this crate's
-/// manifest dir (`rust/crates/golden` → three parents → repo root).
+/// Resolve `tests/golden/<name>`. By default the shared cross-language corpus
+/// lives at the repository root (`rust/crates/golden` → three parents → repo
+/// root); `DW_GOLDEN_DIR` overrides the directory with an absolute path so the
+/// suite still finds the corpus when run from a sandboxed copy of the workspace
+/// (e.g. under `cargo gamma`, whose scratch tree does not include repo-root
+/// siblings of the cargo workspace).
 fn golden_path(name: &str) -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../../tests/golden");
+    let mut path = if let Some(dir) = std::env::var_os("DW_GOLDEN_DIR") {
+        PathBuf::from(dir)
+    } else {
+        let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        root.push("../../../tests/golden");
+        root
+    };
     path.push(name);
     path
 }

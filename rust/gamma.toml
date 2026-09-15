@@ -1,0 +1,29 @@
+# cargo-gamma configuration for the Driftwatch emitter TCB (roadmap #24).
+#
+# Gamma mutates the `runtime` emitter and judges each mutant with BOTH the
+# runtime encoder unit tests and the golden corpus — the AI-tamper-resistant
+# oracle (another version's own behavior). Without `golden` the emitter contract
+# is unpinned; without `runtime` the encoder ladder is unpinned.
+#
+# The `annotations-macros` proc-macro crate is covered SEPARATELY by
+# cargo-mutants (see `.cargo/mutants.toml` and the justfile `mutants` recipe):
+# gamma compiles one instrumented binary and toggles mutants at test runtime, so
+# it cannot mutate a macro that runs at the golden crate's compile time.
+#
+# The golden corpus lives at the repo root (tests/golden), outside this cargo
+# workspace; the runner exports DW_GOLDEN_DIR so the sandboxed build can find it.
+
+packages = ["runtime"]
+test-packages = ["runtime", "golden"]
+all-features = true
+
+# registry.rs renders the static contract JSON. Its thorough oracle is the
+# contract/discover work (#6/#10), not the trace goldens, so its sites are
+# excluded here rather than counted as trace-path gaps. Tracked as a follow-up
+# to fold under mutation once that oracle exists.
+exclude-files = ["crates/runtime/src/registry.rs"]
+
+# Regression ratchet: this PR established 100.0% (206/206 killed, registry
+# excluded). The floor sits just below to absorb minor churn as the emitter
+# evolves; raise it as more comes under test, and never lower it silently.
+min-score = 95.0

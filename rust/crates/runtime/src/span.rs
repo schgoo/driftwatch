@@ -214,6 +214,7 @@ fn next_tick() -> u64 {
 }
 
 /// Mint a fresh trace id as a big-endian counter in the low 8 bytes.
+// #[gamma::skip(literal, reason = "trace_id is a deterministic id the trace comparator ignores and the harness overwrites; its counter step and byte-layout constants are unobservable")]
 fn mint_trace_id() -> [u8; 16] {
     let n = TRACE_ID_COUNTER.with(|c| {
         let next = c.get() + 1;
@@ -227,6 +228,7 @@ fn mint_trace_id() -> [u8; 16] {
 
 /// Return the current trace id, minting one lazily if none exists yet (the
 /// initial state before any [`reset`]).
+// #[gamma::skip(reason = "trace_id is comparator-ignored; the lazy-mint fallback only runs before the first reset and is unobservable in a capture")]
 fn current_trace_id() -> [u8; 16] {
     TRACE_ID.with(|t| {
         if let Some(id) = t.get() {
@@ -256,6 +258,7 @@ pub fn open_span(name: SpanName, attributes: BTreeMap<String, Value>) -> SpanGua
         parent_span_id,
         name,
         start,
+        // #[gamma::skip(option.none_to_some, reason = "SpanGuard::drop overwrites end with the close tick, so the initial None is unobservable for any span that closes (equivalent)")]
         end: None,
         status: SpanStatus::Unset,
         attributes,
@@ -464,6 +467,7 @@ pub fn reset() {
     STACK.with(|s| s.borrow_mut().clear());
     SPAN_ID_COUNTER.with(|c| c.set(0));
     TICK_COUNTER.with(|c| c.set(0));
+    // #[gamma::skip(option.some_to_none, reason = "trace_id is comparator-ignored and re-minted lazily by current_trace_id when None; eager vs lazy minting produces the same unobservable id")]
     TRACE_ID.with(|t| t.set(Some(mint_trace_id())));
 }
 
@@ -723,5 +727,58 @@ mod tests {
             attributes: BTreeMap::new(),
         };
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn event_equality_distinguishes_name_and_attributes() {
+        let attrs = BTreeMap::from([("k".to_string(), Value::Integer(1))]);
+        let base = SpanEvent {
+            name: EventName::Result,
+            time: 1,
+            attributes: attrs.clone(),
+        };
+        // A different attribute value is not equal (guards `eq` from collapsing
+        // to a constant `true`).
+        let other_attrs = SpanEvent {
+            name: EventName::Result,
+            time: 1,
+            attributes: BTreeMap::from([("k".to_string(), Value::Integer(2))]),
+        };
+        assert_ne!(base, other_attrs);
+        // A different name is not equal (guards the `&&` from relaxing to `||`,
+        // which would let a matching attribute map alone declare equality).
+        let other_name = SpanEvent {
+            name: EventName::Error,
+            time: 1,
+            attributes: attrs,
+        };
+        assert_ne!(base, other_name);
+    }
+
+    #[test]
+    fn reset_clears_a_leaked_buffer_and_stack() {
+        reset();
+        // Leak an open span so the buffer holds an unclosed span and the stack
+        // holds its frame — the state `reset` must scrub between captures.
+        std::mem::forget(open_span(SpanName::Scenario, BTreeMap::new()));
+        reset();
+        // Buffer cleared: the leaked span does not survive into the next capture.
+        assert!(take_spans().is_empty());
+        // Stack cleared: the next span is a root, not a child of the stale frame.
+        drop(open_span(SpanName::Operation, BTreeMap::new()));
+        let spans = take_spans();
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].parent_span_id, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "watch_dep")]
+    fn open_dep_without_a_resolvable_component_panics() {
+        reset();
+        // The enclosing span carries no `conformance.component.id`, so component
+        // inheritance has nothing to resolve. Opening a dep must panic rather
+        // than invent a blank component.
+        let _op = open_span(SpanName::Operation, BTreeMap::new());
+        let _dep = open_dep("d", None, BTreeMap::new());
     }
 }

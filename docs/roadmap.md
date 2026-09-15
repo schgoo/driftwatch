@@ -134,13 +134,42 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
 - **#39** ✅ — panic disposition: on a caught panic emit `conformance.fault` (+ partial trace, `ERROR` status), no result. ✚
 - **#40** ✅ — input surface: capture `&mut` non-receiver params as inputs (pre-call value at span open) — supersedes #4's `&mut` exclusion; receivers stay excluded and hidden inputs stay annotator-captured via `watch_point!`. Updated `operation_params` goldens. Whole-value deref-mutation observation (e.g. `*total += …`) remains a follow-up. ▪
 - **#42** — parallel branches: emit `conformance.parallel` with **unordered** child branches from concurrently-executing operations/dependencies. Defines cross-thread `SpanContext` propagation with **globally-unique `span_id`s** (lane-encoded: per-thread lane ∥ per-capture counter) so merged multi-thread spans keep unambiguous `parent_span_id` linkage; single-threaded captures stay byte-deterministic. Deferred from #37a, whose span substrate is single-threaded. Comparator pairs branches by identity, not order. ✚ ~350 · **load-bearing** (id-minting scheme)
+- **#53** — async/concurrent `SpanContext` propagation: the span substrate is
+  thread-local (`runtime/src/span.rs` `SPANS`/`STACK`), so the active-span
+  context is lost across an `.await` thread hop and across `spawn`/thread/channel
+  handoff — a `watch_dep!` in a future resumed on another worker mis-parents.
+  Adds a capture-and-re-enter `SpanContext`, a concurrency-safe **per-run
+  collector** (replacing the thread-local sink), unique spans per retry/repeated
+  invocation, and cancellation/incomplete-operation disposition. Distinct from
+  #42 (span-id *minting*); this is context *propagation* and depends on it.
+  Origin: SpecGate feature-requests §3. ✚ ~400 · **load-bearing** (span identity)
+- **#54** — `Value` typed fidelity: add `Value::Bytes` (binary payloads
+  currently degrade to a `List` of ints) + a native null/unit scalar (unit is
+  today an empty `Map`); apply export-time depth/count/size **bounds** and a
+  **redaction** hook before OTLP serialization (clears the evaluate
+  `M-LOG-STRUCTURED` secrets/PII warning); add a non-interference test
+  (forward-exactly-once). Int-width→`i64`/float→`f64` canonicalization (F3)
+  stays. Ties to #40's whole-value deref-mutation follow-up. Mirrors the
+  upstream SpecGate value gap (`schgoo/specgate#37`). Origin: SpecGate
+  feature-requests §4. ✚ ~350 · **load-bearing** (adds an `Ord`-space variant)
 
 - **#5** ✅ — the trace **golden corpus** as CTSC `.otlp.json` fixtures (per D5) covering every profile clause; re-author the SpecGate `mock_*` goldens as real-dependency (nested-operation) observation. Reuse SpecGate's CTSC corpus + `validate.py`. The emission trust anchor + the ongoing TDD spec (new clause → golden → implement). ▪ ~400
-- **#24** — **mutation testing** capstone: `cargo-mutants` scoped to the emitter
-  TCB (`runtime` + `annotations(-macros)`), run against the native encoder tests
-  + trace goldens only (non-circular oracle), survivors triaged to zero. The
-  "measure the trust anchor" gate — SpecGate #36 Rung 4 analog. Depends on #5
-  (the goldens are the kill oracle). ✚
+- **#24** ✅ — **mutation testing** capstone: a HYBRID gate over the emitter
+  TCB, run against the runtime encoder tests + trace goldens only (non-circular
+  oracle — checked-in bytes, never regenerated from a mutant). **cargo-gamma**
+  mutates the `runtime` emitter (`rust/gamma.toml`: `packages = runtime`,
+  `test-packages = runtime + golden`, `all-features` so the `trace` goldens run,
+  `min-score = 95`); **cargo-mutants** mutates the `annotations(-macros)` surface
+  (`rust/.cargo/mutants.toml`) because gamma instruments once and toggles mutants
+  at test runtime, so it cannot mutate a proc-macro that runs at the golden
+  crate's compile time. On-demand via `just mutants` (sets `DW_GOLDEN_DIR` for
+  gamma's sandbox), not a per-PR gate (slow). Runtime run: **206 mutants → 206
+  killed, 0 survived, 0 uncovered = 100.0%**; a handful of mathematically-
+  equivalent / comparator-ignored sites carry documented `// #[gamma::skip(…)]`
+  directives. `registry.rs` (static-contract JSON) is excluded — its oracle is
+  the contract/discover work (**#6/#10**), tracked as a follow-up. The "measure
+  the trust anchor" gate — SpecGate #36 Rung 4 analog.
+  Depends on #5 (the goldens are the kill oracle). ✚
 
 ### Phase 1.5 — artifact format (reprioritized; load-bearing)
 - **#11** ✅ — **CTSC OTLP emitter**: serialize the runtime buffer to CTSC Trace
