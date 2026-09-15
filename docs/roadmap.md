@@ -180,7 +180,13 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
   load-bearing
 
 ### Phase 2 — contract
-- **#6** — `contract`: lift types, strip `cases`, keep name/types/operations/binding + validation; `.spec.yaml`→`.contract.yaml`. ⚠ ~450
+- **#6** — `contract`: model, parse, and validate the **CTSC Registry 0.2**
+  document (`ctsc.registry`, JSON) — the static contract `discover` (#10)
+  generates. Serde model over `registry.md` + `ctsc-registry-0.2.schema.json`;
+  cross-item validation (§4.1/§7/§8/§10) the JSON schema can't express. The
+  artifact is `*.registry.json`, not the pre-CTSC `.contract.yaml`. Import-file
+  loading + sha256 digest verification + cross-document type resolution (§6) are
+  deferred to a linked-validation follow-up. ⚠ ~450
 
 ### Phase 3 — extraction driver (drop the matcher)
 - **#7** — binding resolution (drop matcher bits). ▪ ~350
