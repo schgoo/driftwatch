@@ -8,5 +8,9 @@ repository.workspace = true
 authors.workspace = true
 description = "Driftwatch extraction driver: binding resolution, runner codegen, build+run+collect, and contract discovery."
 
+[dependencies]
+serde.workspace = true
+toml.workspace = true
+
 [lints]
 workspace = true

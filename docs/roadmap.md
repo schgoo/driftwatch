@@ -38,6 +38,20 @@ test codegen).
 - `--mode diff --base main` — snapshot base + head, compare.
 - `--mode pr --pr <url>` — as diff, scoped to PR-changed files.
 
+Two layers, kept separate (like `cargo evaluate`'s targeting):
+
+- **Capture recipe** — *how* to turn one working tree into artifacts: the
+  `driftwatch.toml` **binding** (a flat list of `commands` that build and run the
+  annotated code so the runtime emits traces the harness collects). Versioned in
+  the repo, so every checkout carries its own recipe. Multi-language is just more
+  commands. Owned by `extract` (#7).
+- **Target selection** — *what* to capture: the CLI resolves each side of a
+  compare to a working tree + its binding, from a git ref (base/branch/tag/prior
+  version), the current tree, a separate directory/repo (an entirely different
+  codebase, with its own binding), or an already-captured artifact. Owned by the
+  CLI (#14–#16). Cross-codebase / cross-language falls out: both sides emit CTSC
+  OTLP, so they diff.
+
 ## Artifact format
 
 Driftwatch emits **CTSC 0.1** (see `docs/trace-contract.md`). One extraction
@@ -183,7 +197,9 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
 - **#6** — `contract`: lift types, strip `cases`, keep name/types/operations/binding + validation; `.spec.yaml`→`.contract.yaml`. ⚠ ~450
 
 ### Phase 3 — extraction driver (drop the matcher)
-- **#7** — binding resolution (drop matcher bits). ▪ ~350
+- **#7** — binding resolution: parse + validate the flat `driftwatch.toml`
+  capture recipe (a `commands` list). Target/ref selection is the CLI's job
+  (#14–#16), not the binding's. ▪ ~150
 - **#8** — runner codegen: drive ops → emit traces (artifact format, no `expected:`/matcher). ⚠ ~450
 - **#9** — build+run+collect: invoke cargo/dotnet, capture CTSC traces (`run_spec` front half minus match tail). ⚠ ~400
 - **#10** — contract extraction: `discover` slice (registry → normalized schema). ▪ ~350

@@ -79,3 +79,7 @@ annotations = { path = "crates/annotations" }
 artifact = { path = "crates/artifact" }
 # JSON assembly for the artifact emitter; also parses discovery output in tests.
 serde_json = "1"
+# Derive-based (de)serialization; the extract binding parses driftwatch.toml.
+serde = { version = "1", features = ["derive"] }
+# TOML parser for the driftwatch.toml binding file.
+toml = "0.8"
