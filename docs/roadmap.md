@@ -134,6 +134,24 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
 - **#39** ✅ — panic disposition: on a caught panic emit `conformance.fault` (+ partial trace, `ERROR` status), no result. ✚
 - **#40** ✅ — input surface: capture `&mut` non-receiver params as inputs (pre-call value at span open) — supersedes #4's `&mut` exclusion; receivers stay excluded and hidden inputs stay annotator-captured via `watch_point!`. Updated `operation_params` goldens. Whole-value deref-mutation observation (e.g. `*total += …`) remains a follow-up. ▪
 - **#42** — parallel branches: emit `conformance.parallel` with **unordered** child branches from concurrently-executing operations/dependencies. Defines cross-thread `SpanContext` propagation with **globally-unique `span_id`s** (lane-encoded: per-thread lane ∥ per-capture counter) so merged multi-thread spans keep unambiguous `parent_span_id` linkage; single-threaded captures stay byte-deterministic. Deferred from #37a, whose span substrate is single-threaded. Comparator pairs branches by identity, not order. ✚ ~350 · **load-bearing** (id-minting scheme)
+- **#53** — async/concurrent `SpanContext` propagation: the span substrate is
+  thread-local (`runtime/src/span.rs` `SPANS`/`STACK`), so the active-span
+  context is lost across an `.await` thread hop and across `spawn`/thread/channel
+  handoff — a `watch_dep!` in a future resumed on another worker mis-parents.
+  Adds a capture-and-re-enter `SpanContext`, a concurrency-safe **per-run
+  collector** (replacing the thread-local sink), unique spans per retry/repeated
+  invocation, and cancellation/incomplete-operation disposition. Distinct from
+  #42 (span-id *minting*); this is context *propagation* and depends on it.
+  Origin: SpecGate feature-requests §3. ✚ ~400 · **load-bearing** (span identity)
+- **#54** — `Value` typed fidelity: add `Value::Bytes` (binary payloads
+  currently degrade to a `List` of ints) + a native null/unit scalar (unit is
+  today an empty `Map`); apply export-time depth/count/size **bounds** and a
+  **redaction** hook before OTLP serialization (clears the evaluate
+  `M-LOG-STRUCTURED` secrets/PII warning); add a non-interference test
+  (forward-exactly-once). Int-width→`i64`/float→`f64` canonicalization (F3)
+  stays. Ties to #40's whole-value deref-mutation follow-up. Mirrors the
+  upstream SpecGate value gap (`schgoo/specgate#37`). Origin: SpecGate
+  feature-requests §4. ✚ ~350 · **load-bearing** (adds an `Ord`-space variant)
 
 - **#5** ✅ — the trace **golden corpus** as CTSC `.otlp.json` fixtures (per D5) covering every profile clause; re-author the SpecGate `mock_*` goldens as real-dependency (nested-operation) observation. Reuse SpecGate's CTSC corpus + `validate.py`. The emission trust anchor + the ongoing TDD spec (new clause → golden → implement). ▪ ~400
 - **#24** — **mutation testing** capstone: `cargo-mutants` scoped to the emitter
