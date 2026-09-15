@@ -154,11 +154,22 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
   feature-requests §4. ✚ ~350 · **load-bearing** (adds an `Ord`-space variant)
 
 - **#5** ✅ — the trace **golden corpus** as CTSC `.otlp.json` fixtures (per D5) covering every profile clause; re-author the SpecGate `mock_*` goldens as real-dependency (nested-operation) observation. Reuse SpecGate's CTSC corpus + `validate.py`. The emission trust anchor + the ongoing TDD spec (new clause → golden → implement). ▪ ~400
-- **#24** — **mutation testing** capstone: `cargo-mutants` scoped to the emitter
-  TCB (`runtime` + `annotations(-macros)`), run against the native encoder tests
-  + trace goldens only (non-circular oracle), survivors triaged to zero. The
-  "measure the trust anchor" gate — SpecGate #36 Rung 4 analog. Depends on #5
-  (the goldens are the kill oracle). ✚
+- **#24** ✅ — **mutation testing** capstone: a HYBRID gate over the emitter
+  TCB, run against the runtime encoder tests + trace goldens only (non-circular
+  oracle — checked-in bytes, never regenerated from a mutant). **cargo-gamma**
+  mutates the `runtime` emitter (`rust/gamma.toml`: `packages = runtime`,
+  `test-packages = runtime + golden`, `all-features` so the `trace` goldens run,
+  `min-score = 95`); **cargo-mutants** mutates the `annotations(-macros)` surface
+  (`rust/.cargo/mutants.toml`) because gamma instruments once and toggles mutants
+  at test runtime, so it cannot mutate a proc-macro that runs at the golden
+  crate's compile time. On-demand via `just mutants` (sets `DW_GOLDEN_DIR` for
+  gamma's sandbox), not a per-PR gate (slow). Runtime run: **206 mutants → 206
+  killed, 0 survived, 0 uncovered = 100.0%**; a handful of mathematically-
+  equivalent / comparator-ignored sites carry documented `// #[gamma::skip(…)]`
+  directives. `registry.rs` (static-contract JSON) is excluded — its oracle is
+  the contract/discover work (**#6/#10**), tracked as a follow-up. The "measure
+  the trust anchor" gate — SpecGate #36 Rung 4 analog.
+  Depends on #5 (the goldens are the kill oracle). ✚
 
 ### Phase 1.5 — artifact format (reprioritized; load-bearing)
 - **#11** ✅ — **CTSC OTLP emitter**: serialize the runtime buffer to CTSC Trace

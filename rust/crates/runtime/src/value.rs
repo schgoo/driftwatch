@@ -293,6 +293,39 @@ mod tests {
     }
 
     #[test]
+    fn variant_rank_pins_the_stable_cross_variant_order() {
+        use std::cmp::Ordering;
+        // The ranks are a persisted-ordering contract (see `variant_rank`): a
+        // `Set`/`Map` written under one ranking must never re-sort under another.
+        // Pin every rank value so a uniform shift or a single reorder is caught.
+        assert_eq!(variant_rank(&Value::Bool(false)), 0);
+        assert_eq!(variant_rank(&Value::Integer(0)), 1);
+        assert_eq!(variant_rank(&Value::Float(0.0)), 2);
+        assert_eq!(variant_rank(&Value::String(String::new())), 3);
+        assert_eq!(variant_rank(&Value::List(Vec::new())), 4);
+        assert_eq!(variant_rank(&Value::Set(BTreeSet::new())), 5);
+        assert_eq!(variant_rank(&Value::Map(BTreeMap::new())), 6);
+        assert_eq!(variant_rank(&Value::variant("v", Value::Bool(false))), 7);
+
+        // One representative per variant, in ascending rank: every adjacent pair
+        // is strictly `Less` and no two variants collapse to `Equal`.
+        let ascending = [
+            Value::Bool(false),
+            Value::Integer(0),
+            Value::Float(0.0),
+            Value::String(String::new()),
+            Value::List(Vec::new()),
+            Value::Set(BTreeSet::new()),
+            Value::Map(BTreeMap::new()),
+            Value::variant("v", Value::Bool(false)),
+        ];
+        for pair in ascending.windows(2) {
+            assert_eq!(pair[0].cmp(&pair[1]), Ordering::Less);
+            assert_ne!(pair[0], pair[1]);
+        }
+    }
+
+    #[test]
     fn debug_string_escaping() {
         let value = Value::String("quote: \", slash: \\, newline: \n, unicode: é 𝄞".to_string());
         assert_eq!(

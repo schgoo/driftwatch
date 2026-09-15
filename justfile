@@ -60,6 +60,23 @@ readme-check:
 coverage:
     cd rust && cargo llvm-cov --workspace --all-features --summary-only --fail-under-lines 85
 
+# On-demand HYBRID mutation testing of the emitter TCB, killed by the runtime
+# encoder tests + byte-exact trace goldens. cargo-gamma mutates the runtime
+# emitter (rust/gamma.toml); cargo-mutants mutates the annotation proc-macros
+# that gamma cannot reach (rust/.cargo/mutants.toml). Slow, non-circular trust-
+# anchor measurement — NOT a per-PR gate. Survivors are gaps in the goldens: add
+# a golden (preferred) or record a justified exclusion. DW_GOLDEN_DIR points the
+# sandboxed gamma build at the repo-root corpus (outside the cargo workspace).
+[windows]
+mutants:
+    cd rust; $env:DW_GOLDEN_DIR = "{{justfile_directory()}}/tests/golden"; cargo gamma run
+    cd rust && cargo mutants
+
+[unix]
+mutants:
+    cd rust && DW_GOLDEN_DIR="{{justfile_directory()}}/tests/golden" cargo gamma run
+    cd rust && cargo mutants
+
 # Full pre-PR gate: build, test, clippy, format, licenses, READMEs, and evaluate.
 # `evaluate` runs last: it is not a CI gate (unavailable on hosted runners), so a
 # known-baseline evaluate finding must not short-circuit the CI-gating checks.

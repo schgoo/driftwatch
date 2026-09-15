@@ -133,6 +133,7 @@ impl<T: ToValue + Ord> ToValue for BTreeSet<T> {
 impl<T: ToValue + Eq + std::hash::Hash, S: std::hash::BuildHasher> ToValue for HashSet<T, S> {
     fn to_value(&self) -> Value {
         let mut v: Vec<Value> = self.iter().map(ToValue::to_value).collect();
+        // #[gamma::skip(iter.remove_sort, reason = "the vec is collected into a Value::Set (a BTreeSet) which reorders by Ord regardless of input order, so this pre-sort is redundant and dropping it is equivalent")]
         v.sort();
         Value::Set(v.into_iter().collect())
     }
@@ -232,6 +233,28 @@ mod tests {
         assert_eq!(
             set.to_value(),
             Value::Set(BTreeSet::from([Value::Integer(1), Value::Integer(2)]))
+        );
+    }
+
+    #[test]
+    fn pointer_sized_ints_and_hashset() {
+        // `isize` encodes through `*self as i64` (identity on 64-bit).
+        assert_eq!((-7_isize).to_value(), Value::Integer(-7));
+        assert_eq!(0_isize.to_value(), Value::Integer(0));
+        // `usize` saturates to `i64::MAX` above the i64 ceiling, like `u64`.
+        assert_eq!(usize::MAX.to_value(), Value::Integer(i64::MAX));
+        assert_eq!(5_usize.to_value(), Value::Integer(5));
+
+        // `HashSet` dedups and canonicalizes into a `Value::Set` (a `BTreeSet`),
+        // so iteration order does not leak into the encoding.
+        let set: std::collections::HashSet<i32> = [3, 1, 2, 1].into_iter().collect();
+        assert_eq!(
+            set.to_value(),
+            Value::Set(BTreeSet::from([
+                Value::Integer(1),
+                Value::Integer(2),
+                Value::Integer(3),
+            ]))
         );
     }
 }

@@ -35,6 +35,11 @@ just check   # build + test + clippy + fmt + cargo evaluate (the full gate)
 
 `cargo evaluate` is part of the harness — treat a failure like a clippy failure.
 
+`just mutants` runs a hybrid mutation gate over the emitter trust anchor —
+`cargo-gamma` on the `runtime` emitter, `cargo-mutants` on the
+`annotations(-macros)` proc-macros gamma can't reach — killed by the encoder
+tests + trace goldens. An on-demand measurement, not a per-PR gate.
+
 ## License
 
 [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)

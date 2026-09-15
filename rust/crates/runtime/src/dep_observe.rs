@@ -376,4 +376,45 @@ mod tests {
         });
         assert_eq!(none.name, EventName::Empty);
     }
+
+    #[test]
+    fn display_only_value_emits_its_display_string() {
+        struct DisplayOnly;
+        impl std::fmt::Display for DisplayOnly {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "shown")
+            }
+        }
+        // Display but not `ToValue`: the ladder lands on the `Display` rung.
+        let ev = one_event(|| {
+            let v = DisplayOnly;
+            (&&&&&&&DepObserve(&v)).observe();
+        });
+        assert_eq!(ev.name, EventName::Result);
+        assert_eq!(
+            ev.attributes.get("conformance.result.value"),
+            Some(&Value::String("shown".to_string()))
+        );
+    }
+
+    #[test]
+    fn unclassifiable_value_falls_back_to_its_type_name() {
+        struct Bare;
+        // No `ToValue`, `Display`, or `Debug`: the level-0 safety net emits the
+        // type name so the dependency is never silently dropped.
+        let ev = one_event(|| {
+            let v = Bare;
+            (&&&&&&&DepObserve(&v)).observe();
+        });
+        assert_eq!(ev.name, EventName::Result);
+        match ev.attributes.get("conformance.result.value") {
+            Some(Value::String(s)) => {
+                assert!(
+                    s.contains("Bare"),
+                    "type-name result should name the type, got {s:?}"
+                );
+            }
+            other => panic!("expected a type-name string result, got {other:?}"),
+        }
+    }
 }

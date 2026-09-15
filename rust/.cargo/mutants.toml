@@ -1,0 +1,29 @@
+# cargo-mutants configuration for the Driftwatch annotation surface (roadmap #24).
+#
+# This is the proc-macro half of a HYBRID mutation gate. cargo-gamma mutates the
+# `runtime` emitter (see rust/gamma.toml); it compiles one instrumented binary
+# and toggles mutants at test runtime, so it cannot mutate a macro that runs at
+# the golden crate's COMPILE time. cargo-mutants rebuilds per mutant and re-
+# expands the (mutated) macros, so it covers the annotation surface here.
+#
+# On-demand only (`just mutants` runs both halves) - mutation runs are slow and
+# are not a per-PR gate. See docs/roadmap.md #24.
+
+# Mutate the annotation surface: the proc-macros and their thin facade crate.
+# The runtime emitter is gamma's job and is deliberately NOT examined here.
+examine_globs = [
+    "crates/annotations/src/**",
+    "crates/annotations-macros/src/**",
+]
+
+# Oracle: the byte-exact trace goldens (run under the `trace` feature). The
+# goldens are checked-in bytes, never regenerated from a mutant, so a macro
+# mutation must be caught by the frozen corpus, not by hand-authored tests.
+# Golden rebuilds re-expand the mutated macros.
+test_package = [
+    "golden",
+]
+
+# Enable emission features so the golden corpus actually runs (the `trace`
+# feature); a default build expands annotations to identity and skips the goldens.
+all_features = true
