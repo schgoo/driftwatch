@@ -50,8 +50,10 @@
 
 mod anyvalue;
 mod capture;
+mod config;
 mod otlp;
 mod resource;
 
 pub use capture::{OtlpFormat, TraceCapture};
+pub use config::{CONFIG_FILE_NAME, CaptureConfig, ConfigError, OUTDIR_ENV};
 pub use resource::{CONFORMANCE_VERSION, Resource};
