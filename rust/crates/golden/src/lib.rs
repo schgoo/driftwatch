@@ -1,6 +1,6 @@
 //! The Driftwatch golden trace corpus: the reusable annotated fixture library.
 //!
-//! Each byte-exact CTSC 0.1 golden under the repository-root `tests/golden/`
+//! Each byte-exact CTSC 0.2 golden under the repository-root `tests/golden/`
 //! directory is produced by running **real annotated fixture code** — the
 //! operations in this crate — through the annotation macros and runtime, then
 //! serializing the drained span tree with the [`artifact`] emitter via the live

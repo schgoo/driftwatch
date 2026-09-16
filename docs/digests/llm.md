@@ -44,8 +44,8 @@ behavior — no hand-authored assertion to weaken.
 
 ## Decision boundaries (need a human owner)
 
-- Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — resolved via CTSC adoption; **implemented** in the `artifact` crate (#11). The `artifact` crate renders a `TraceCapture` (caller-supplied `Resource` + `Vec<runtime::Span>`) to a CTSC `TracesData`, emitting `conformance.version` = `"0.1.0"` and, on the panic-fault path, `conformance.fault.type` = `"unexpected"`.
-- Trace emission contract: **CTSC 0.1 producer profile** (docs/trace-contract.md); D1-D5 resolved. Observable shape + canonicalization owned there.
+- Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — resolved via CTSC adoption; **implemented** in the `artifact` crate (#11). The `artifact` crate renders a `TraceCapture` (caller-supplied `Resource` + `Vec<runtime::Span>`) to a CTSC `TracesData`, emitting `conformance.version` = `"0.2.0"` and, on the panic-fault path, `conformance.fault.type` = `"unexpected"`.
+- Trace emission contract: **CTSC 0.2 producer profile** (docs/trace-contract.md); D1-D5 resolved. Observable shape + canonicalization owned there.
 - CLI surface (`snapshot` / `compare` / `--mode full|diff|pr`).
 
 ## File organization
