@@ -253,7 +253,7 @@ that runs is the project's own suite. There is no command-execution surface.
 
 ### Phase 5 — diff (new)
 - **#12** — contract-diff: structural diff + breaking-change classification + report. ✚ ~450
-- **#13** — trace-diff: CTSC comparison (Strict) — pair operations, diff events/values, first-divergence report. ✚ ~450
+- **#13** — trace-diff: CTSC comparison under the **Strict** policy (`ctsc.strict/0.1.0`, optional). Comparison indexes on `conformance.component.id`, not `target.name`: within a component, operations pair **by position**, and paired operations must share `component.id` / `operation.name` / inputs; repeated invocations of one operation pair by order. Diff events/values; first-divergence report. A reorder-resilient identity-keyed variant is deferred to the comparison-engine build. ✚ ~450
 
 ### Phase 6 — CLI (new)
 - **#14** — CLI skeleton + `snapshot` (extract → artifact). ✚ ~300

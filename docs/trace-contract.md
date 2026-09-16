@@ -136,11 +136,15 @@ Tagged-union variant labels carry no type identity; that lives in the registry
 
 ## Comparison & registry
 
-Default comparison policy: **CTSC Strict** (`ctsc.strict/0.1.0`) — sequential
-operations pair by position. If real captures show unstable operation ordering
-across versions, a Driftwatch custom policy may add input-keyed operation matching
-(CTSC §8). `discover` generates the CTSC Registry document from the link-time
-registry; Linked validation binds a trace to it.
+Default comparison policy: **CTSC Strict** (`ctsc.strict/0.1.0`, optional).
+Comparison indexes on `conformance.component.id`, not `target.name`: within a
+component, operations pair **by position**, and paired operations MUST share
+`component.id`, `operation.name`, and inputs; repeated invocations of one
+operation pair by order. If real captures show unstable operation ordering across
+versions, a Driftwatch custom policy may add input-keyed (identity) operation
+matching (CTSC §8), decided when the comparison engine is built. `discover`
+generates the CTSC Registry document from the link-time registry; Linked
+validation binds a trace to it.
 
 ## Change control
 
