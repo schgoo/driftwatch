@@ -3,16 +3,19 @@
 //! Each byte-exact CTSC 0.1 golden under the repository-root `tests/golden/`
 //! directory is produced by running **real annotated fixture code** — the
 //! operations in this crate — through the annotation macros and runtime, then
-//! serializing the drained span tree with the [`artifact`] emitter. The
-//! integration test in `tests/golden.rs` is the harness: it frames each fixture
-//! with a `conformance.run` + `conformance.scenario` span, invokes these
-//! operations, pins the (otherwise nondeterministic) trace id to a fixed
-//! constant, and byte-compares the emitted OTLP against the on-disk golden — or
+//! serializing the drained span tree with the [`artifact`] emitter via the live
+//! root-close emit sink. The integration test in `tests/golden.rs` is the
+//! harness: it frames each fixture with a `conformance.run` +
+//! `conformance.scenario` span, invokes these operations on a fresh thread (so
+//! the id/tick/trace counters start at zero — deterministic ids with no
+//! trace-id pinning), lets the sink append the capture to `trace.otlp.jsonl`,
+//! and byte-compares that emitted OTLP against the on-disk golden — or
 //! regenerates it under `DW_BLESS=1`.
 //!
 //! These operations are a **library** (not test-local) so the future extraction
 //! driver can drive the identical code. Off-trace they expand to inert identity;
-//! the goldens run only under the `trace` feature.
+//! the goldens run only under the `driftwatch` feature (which turns on the
+//! `trace` emission plus the live sink).
 //!
 //! # Fixtures
 //!

@@ -1,24 +1,43 @@
-//! The golden harness: a fixed [`Resource`], the trace-id pin, run/scenario
-//! framing, and the compare-or-bless comparator.
+//! The golden harness: the live-emit infrastructure that drives each fixture
+//! through the real root-close sink (the `driftwatch` feature), plus the
+//! compare-or-bless comparators.
+//!
+//! Every fixture runs on a **fresh spawned thread** (so the per-thread
+//! id/tick/trace counters always start at zero → fully deterministic ids,
+//! independent of cargo's worker-thread reuse) and its span tree is exported by
+//! the installed sink as one compact JSONL line appended to a process-global
+//! `trace.otlp.jsonl`. A process-global [`EMIT_LOCK`] brackets each test's
+//! truncate → emit → read of that shared file so parallel `#[test]`s never race.
+//!
+//! The committed goldens stay human-inspectable: a `.otlp.json` golden is the
+//! sink's compact line losslessly pretty-printed (the emitter builds its JSON
+//! from `serde_json`'s default `BTreeMap`, so keys are canonically sorted and all
+//! numbers are bare small ints or CTSC strings — `to_string_pretty` on the
+//! parsed line reproduces the committed bytes exactly). The `.otlp.jsonl`
+//! golden is compared raw/compact, line for line.
 //!
 //! # External acceptance (manual, not a cargo gate)
 //!
 //! Each `.otlp.json` — and each line of the `.jsonl` — is additionally accepted
 //! by the upstream CTSC `validate.py trace` oracle.
 
+use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock, PoisonError};
 
 use annotations::__rt::{open_span, push_fault, set_status};
-use annotations::{Span, SpanName, SpanStatus, Value, reset, take_spans};
-use artifact::{OtlpFormat, Resource, TraceCapture};
-use std::collections::BTreeMap;
+use annotations::{SpanName, SpanStatus, Value, reset};
 
-/// The fixed CTSC resource paired with every golden capture (tool + target
-/// identity); `conformance.version` is injected by the emitter.
-pub fn resource() -> Resource {
-    Resource::new("driftwatch", "0.1.0", "golden-corpus", "rust")
-}
+/// Serializes each test's truncate → emit → read of the process-global trace
+/// file, and guards the one-time config/cwd/install setup below. Cargo runs
+/// `#[test]`s in parallel on a shared pool, so without this lock two tests could
+/// interleave writes to (or reads of) the single shared `trace.otlp.jsonl`.
+static EMIT_LOCK: Mutex<()> = Mutex::new(());
+
+/// One-time process setup, run inside the [`EMIT_LOCK`] critical section on the
+/// first emit: it caches the resolved `trace.otlp.jsonl` path.
+static SETUP: OnceLock<PathBuf> = OnceLock::new();
 
 /// The run span's required `conformance.run.id`.
 fn run_attributes() -> BTreeMap<String, Value> {
@@ -42,23 +61,95 @@ fn scenario_attributes(name: &str, index: i64) -> BTreeMap<String, Value> {
     ])
 }
 
-/// Reset the runtime buffer, open a `conformance.run` + `conformance.scenario`
-/// frame (the extraction driver's eventual job), run `body` inside the scenario,
-/// close the frame, and return the drained spans (run → scenario → operations).
-pub fn scenario<F: FnOnce()>(name: &str, index: i64, body: F) -> Vec<Span> {
+/// Install the live emit sink. Split behind a `cfg` so `common` still compiles
+/// without the feature (the goldens are then `#[ignore]`d and never reach here).
+#[cfg(feature = "driftwatch")]
+fn install_sink() {
+    annotations::install();
+}
+
+#[cfg(not(feature = "driftwatch"))]
+fn install_sink() {
+    unreachable!("golden emit requires the `driftwatch` feature");
+}
+
+/// Configure the process once and return the resolved trace-file path.
+///
+/// No `env::set_var` (it is `unsafe` in edition 2024): the capture is configured
+/// via a written `driftwatch.toml` plus a safe `set_current_dir`, so the sink's
+/// config resolution walks up to it. `golden_path` uses the compile-time
+/// `CARGO_MANIFEST_DIR`, so changing cwd does not break golden-file resolution.
+fn setup() -> PathBuf {
+    SETUP
+        .get_or_init(|| {
+            let tmp = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("golden-emit");
+            let out = tmp.join("out");
+            std::fs::create_dir_all(&out).expect("create the emit outdir");
+            std::fs::write(
+                tmp.join("driftwatch.toml"),
+                "outdir = \"out\"\n[target]\nname = \"golden-corpus\"\n",
+            )
+            .expect("write driftwatch.toml");
+            std::env::set_current_dir(&tmp).expect("set cwd to the emit tempdir");
+            install_sink();
+            out.join("trace.otlp.jsonl")
+        })
+        .clone()
+}
+
+/// Open a `conformance.run` + `conformance.scenario` frame (the extraction
+/// driver's eventual job), run `body` inside the scenario, then close the frame.
+/// Closing the root span (the run) triggers the sink to append one JSONL line.
+///
+/// It must NOT call `take_spans()` — the sink already drains the buffer on root
+/// close. Distinct `reset()`s re-zero the id/tick counters and mint a fresh
+/// (monotonic) trace id, so back-to-back scenarios on one thread get distinct
+/// trace ids (`..01`, `..02`, …) while everything else stays deterministic.
+pub fn run_scenario<F: FnOnce()>(name: &str, index: i64, body: F) {
     reset();
     let run = open_span(SpanName::Run, run_attributes());
     let scenario = open_span(SpanName::Scenario, scenario_attributes(name, index));
     body();
     drop(scenario);
     drop(run);
-    take_spans()
+}
+
+/// Drive a full emit cycle: hold [`EMIT_LOCK`], ensure setup, truncate the
+/// shared trace file, run `body` on a FRESH spawned thread (so the per-thread
+/// counters start at zero → deterministic ids), then read the file back and
+/// return its contents. `body` performs one or more [`run_scenario`] calls; each
+/// root close appends one line.
+///
+/// The lock is captured *only* to bracket truncate → emit → read; it is
+/// released when this function returns (the returned `String` owns the bytes),
+/// so the caller's `assert_eq!`/bless runs **outside** the lock. Asserting while
+/// holding `EMIT_LOCK` would poison it on a golden mismatch and cascade the
+/// failure into every parallel test — capture bytes under the lock, compare
+/// after it.
+pub fn emit<F: FnOnce() + Send>(body: F) -> String {
+    let _guard = EMIT_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    let path = setup();
+    // Truncate so only this cycle's lines are present. The sink holds its own
+    // append handle; O_APPEND / FILE_APPEND_DATA recomputes EOF per write, so
+    // the next appended line lands at offset 0 after this truncation.
+    std::fs::write(&path, b"").expect("truncate the shared trace file");
+    std::thread::scope(|scope| {
+        scope.spawn(body);
+    });
+    std::fs::read_to_string(&path).expect("read the emitted trace file")
+}
+
+/// Run one fixture scenario on a fresh thread and return the emitted file
+/// contents (exactly one compact JSONL line).
+pub fn emit_scenario<F: FnOnce() + Send>(name: &str, index: i64, body: F) -> String {
+    emit(move || run_scenario(name, index, body))
 }
 
 /// A run/scenario frame that records a harness-emitted **supervisor** fault on
 /// the scenario span (no annotation produces one) and marks the scenario Error.
-pub fn supervisor_fault(name: &str, index: i64) -> Vec<Span> {
-    scenario(name, index, || {
+/// Returns the emitted file contents (one compact JSONL line).
+pub fn supervisor_fault(name: &str, index: i64) -> String {
+    emit_scenario(name, index, || {
         push_fault(
             "process_exit",
             "supervisor",
@@ -78,30 +169,13 @@ pub fn expect_panic(f: impl FnOnce()) {
     outcome.expect_err("the fixture must panic to record a fault");
 }
 
-/// A fixed nonzero trace id. The comparator ignores the correlator, but the
-/// on-disk bytes must be stable, so the harness overwrites the nondeterministic
-/// per-thread trace id on every drained span. Distinct `index` values keep the
-/// two `.jsonl` captures from colliding on `(traceId, spanId)`.
-fn pinned_trace_id(index: u8) -> [u8; 16] {
-    let mut id = [0x11_u8; 16];
-    id[15] = index + 1;
-    id
-}
-
-fn pin(mut spans: Vec<Span>, index: u8) -> Vec<Span> {
-    let tid = pinned_trace_id(index);
-    for span in &mut spans {
-        span.trace_id = tid;
-    }
-    spans
-}
-
 /// Resolve `tests/golden/<name>`. By default the shared cross-language corpus
 /// lives at the repository root (`rust/crates/golden` → three parents → repo
 /// root); `DW_GOLDEN_DIR` overrides the directory with an absolute path so the
 /// suite still finds the corpus when run from a sandboxed copy of the workspace
 /// (e.g. under `cargo gamma`, whose scratch tree does not include repo-root
-/// siblings of the cargo workspace).
+/// siblings of the cargo workspace). This uses the compile-time-absolute
+/// `CARGO_MANIFEST_DIR`, so the test-side `set_current_dir` does not affect it.
 fn golden_path(name: &str) -> PathBuf {
     let mut path = if let Some(dir) = std::env::var_os("DW_GOLDEN_DIR") {
         PathBuf::from(dir)
@@ -114,25 +188,9 @@ fn golden_path(name: &str) -> PathBuf {
     path
 }
 
-/// Serialize `captures` (each pinned with a distinct trace id) in `format`, then
-/// byte-compare against the on-disk golden — or regenerate it under `DW_BLESS`.
-///
-/// A `.otlp.json` fixture passes a single capture; the streaming `.otlp.jsonl`
-/// passes several, each rendered as one `\n`-terminated `TracesData` line.
-pub fn compare_or_bless(name: &str, format: OtlpFormat, captures: Vec<Vec<Span>>) {
-    let mut rendered = String::new();
-    for (index, spans) in captures.into_iter().enumerate() {
-        let capture = TraceCapture {
-            resource: resource(),
-            spans: pin(spans, u8::try_from(index).expect("few captures per golden")),
-        };
-        rendered.push_str(&capture.to_otlp(format));
-    }
-    // Pretty JSON has no trailing newline; keep goldens newline-terminated.
-    if format == OtlpFormat::Json && !rendered.ends_with('\n') {
-        rendered.push('\n');
-    }
-
+/// Byte-compare `rendered` against the on-disk golden `name`, or regenerate it
+/// under `DW_BLESS=1`.
+fn write_or_compare(name: &str, rendered: &str) {
     let path = golden_path(name);
     if std::env::var_os("DW_BLESS").is_some() {
         std::fs::write(&path, rendered.as_bytes())
@@ -149,4 +207,30 @@ pub fn compare_or_bless(name: &str, format: OtlpFormat, captures: Vec<Vec<Span>>
             "golden {name} drifted from the on-disk bytes; regenerate with DW_BLESS=1"
         );
     }
+}
+
+/// Compare a single-capture `.otlp.json` golden against the sink's one JSONL
+/// line, losslessly pretty-printed via a `serde_json` round-trip (canonical
+/// `BTreeMap` key order + bare-int/CTSC-string numbers make this byte-exact), or
+/// regenerate it under `DW_BLESS=1`.
+pub fn compare_or_bless_json(name: &str, emitted: &str) {
+    let line = emitted.trim_end_matches('\n');
+    assert!(
+        !line.contains('\n'),
+        "a single-capture .otlp.json golden must come from exactly one JSONL line"
+    );
+    let value: serde_json::Value =
+        serde_json::from_str(line).expect("the emitted JSONL line parses as JSON");
+    let mut pretty = serde_json::to_string_pretty(&value)
+        .expect("re-serializing a parsed serde_json::Value is infallible");
+    // Pretty JSON has no trailing newline; keep goldens newline-terminated.
+    pretty.push('\n');
+    write_or_compare(name, &pretty);
+}
+
+/// Compare the multi-capture streaming `.otlp.jsonl` golden against the sink's
+/// raw compact output (one `\n`-terminated line per capture — jsonl stays
+/// raw/compact, it is never pretty-printed), or regenerate it under `DW_BLESS=1`.
+pub fn compare_or_bless_jsonl(name: &str, emitted: &str) {
+    write_or_compare(name, emitted);
 }
