@@ -38,6 +38,14 @@ test codegen).
 - `--mode diff --base main` — snapshot base + head, compare.
 - `--mode pr --pr <url>` — as diff, scoped to PR-changed files.
 
+Capture is execution-free: each side of a compare is an artifact dir written by
+the project's *own* `cargo test --features driftwatch` run (registry + trace,
+see Phase 3). `compare <A> <B>` diffs two such dirs. Automated multi-ref modes
+(`--mode diff --base main`, `snapshot` of another ref) obtain each version's
+artifacts from a suite run on that ref (developer or CI) rather than by having
+Driftwatch build the ref itself. Driftwatch building another version is
+out of scope.
+
 ## Artifact format
 
 Driftwatch emits **CTSC 0.1** (see `docs/trace-contract.md`). One extraction
@@ -75,7 +83,7 @@ bespoke binary), the golden corpus (#5 → CTSC corpus), and the registry/discov
 | ▪ `specgate-runtime` → `runtime` (buffer, `Value`, `SpecEvent`, registry) | matcher + operator catalog (`$gt`, `$unordered`, …); the lossy `serde_json` record mode |
 | ▪ `specgate-annotations(-macros)` | `expected:` cases, narrative/level/provenance |
 | ⚠ `specgate-types` → `contract` (strip `cases`) | self-host / conformance authored ledgers |
-| ⚠ harness driver slice: binding-resolve + codegen + build+run+collect + `discover` | `validate` case-runnability, `extract --cases` |
+| ⚠ harness driver slice: global span sink + exit-flush (auto-emit) + `discover` | binding *commands* / runner codegen / build+run+collect; `validate` case-runnability, `extract --cases` |
 | ▪ C# `SpecGate.Weaver` + `SpecGate.Runtime` | spec-case codegen, the matcher tail of `run_spec` |
 | ▪ the #36 trace goldens + encoder edge tests (the extraction TCB) | |
 
@@ -197,11 +205,40 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
   contract via digest, cross-version type-identity)? Scope it against Phase 5
   diff value before building. ✚
 
-### Phase 3 — extraction driver (drop the matcher)
-- **#7** — binding resolution (drop matcher bits). ▪ ~350
-- **#8** — runner codegen: drive ops → emit traces (artifact format, no `expected:`/matcher). ⚠ ~450
-- **#9** — build+run+collect: invoke cargo/dotnet, capture CTSC traces (`run_spec` front half minus match tail). ⚠ ~400
-- **#10** — contract extraction: `discover` slice (registry → normalized schema). ▪ ~350
+### Phase 3 — auto-emit on test run (Driftwatch executes nothing)
+
+Capture happens as a **side effect of the project's own test run**:
+`cargo test --features driftwatch` links the runtime, the tests exercise the
+annotated ops, and on process exit the runtime flushes a **registry** + **trace**
+to an output dir. Driftwatch runs none of the project's commands: the only code
+that runs is the project's own suite. There is no command-execution surface.
+
+- **#7** — **capture config + output contract**: a repo-root `driftwatch.toml`
+  read by both the emitter (where/how to write) and the CLI (where to read).
+  Keys:
+  - `outdir` — artifact dir, default `target/driftwatch/`; `DRIFTWATCH_OUT_DIR`
+    overrides. Precedence: env var > `outdir` > default.
+  - `[target] name` — the language-neutral `conformance.target.name` identity a
+    compare pairs on (resource.rs); default `CARGO_PKG_NAME`, **overridable** so a
+    Rust and a C# run of one component can declare the same target and diff
+    cross-language (`target.language` stays emitter-fixed, `"rust"` here).
+  - `format` — trace serialization, `json` | `jsonl` (maps to `OtlpFormat`).
+  - `clean` — wipe `outdir` before a run so a prior run's artifacts can't mix
+    into a capture; default off.
+
+  Artifact file names are fixed convention (`registry.json`,
+  `trace.otlp.jsonl`), not configurable. Parser is feature-gated so it stays out
+  of production builds. ▪ ~250
+- **#8** — **auto-emit flush**: promote the thread-local span buffer
+  (`span.rs` `SPANS`, drained per-thread by `take_spans`) to a global,
+  cross-thread sink, and register a process-exit hook that renders the registry
+  (`runtime::discovery_json`) and the trace (`TraceCapture::to_otlp`) and writes
+  both to the resolved `outdir`. Feature-gated on `driftwatch`. `cargo test` is
+  multi-threaded, so the sink must aggregate across threads rather than flush a
+  single thread from `main`. ⚠ ~450
+- **#10** — **registry emission**: wire `discovery_json` into the flush and
+  confirm its output validates against the #6 `contract` crate; golden it. The
+  static normalization already exists in `runtime::registry`. ▪ ~250
 
 
 ### Phase 5 — diff (new)
