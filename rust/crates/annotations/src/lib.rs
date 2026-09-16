@@ -36,6 +36,11 @@ pub use runtime::{
     EventName, Span, SpanEvent, SpanName, SpanStatus, ToValue, Value, reset, take_spans,
 };
 
+#[cfg(feature = "driftwatch")]
+mod emit;
+#[cfg(feature = "driftwatch")]
+pub use emit::install;
+
 /// Hidden plumbing the generated macro code funnels through. Not part of the
 /// stable public API — user code should never name it directly.
 #[doc(hidden)]

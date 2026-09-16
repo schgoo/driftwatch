@@ -39,8 +39,26 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 use crate::Value;
+
+/// Process-global sink invoked when a thread's root span closes. The runtime
+/// cannot depend on the artifact layer (the dependency points the other way),
+/// so the feature-gated emitter glue registers a callback here via [`set_sink`]
+/// and `SpanGuard::drop` invokes it on root close — the OpenTelemetry
+/// `SimpleSpanProcessor` export-on-close model, without any process-exit hook.
+static SINK: OnceLock<fn(&[Span])> = OnceLock::new();
+
+/// Register the root-close span sink. The first registration wins and later
+/// calls are ignored (idempotent), so installing the emitter twice is harmless.
+///
+/// When a sink is registered, closing a thread's root span drains the completed
+/// span tree and hands it to `sink`; with no sink registered the buffer is left
+/// intact for the [`take_spans`]-based golden path.
+pub fn set_sink(sink: fn(&[Span])) {
+    let _ = SINK.set(sink);
+}
 
 /// The closed set of CTSC span names. Maps to the fixed `conformance.*` span
 /// names (CTSC trace §6); the domain name is an attribute, not the span name.
@@ -482,8 +500,12 @@ pub struct SpanGuard {
 
 impl Drop for SpanGuard {
     fn drop(&mut self) {
-        STACK.with(|s| {
-            s.borrow_mut().pop();
+        // Pop this frame and record, in the same borrow, whether the stack is
+        // now empty — i.e. this was the root span closing.
+        let is_root_close = STACK.with(|s| {
+            let mut stack = s.borrow_mut();
+            stack.pop();
+            stack.is_empty()
         });
         let end = next_tick();
         SPANS.with(|b| {
@@ -491,6 +513,14 @@ impl Drop for SpanGuard {
                 span.end = Some(end);
             }
         });
+        // Export on root close (the OTel SimpleSpanProcessor model): when the
+        // root span closes and a sink is registered, drain the completed tree
+        // and hand it to the sink. Only drain when a sink is present — with no
+        // sink the buffer is left intact for the `take_spans()` golden path.
+        if is_root_close && let Some(sink) = SINK.get() {
+            let spans = take_spans();
+            sink(&spans);
+        }
     }
 }
 
@@ -780,5 +810,58 @@ mod tests {
         // than invent a blank component.
         let _op = open_span(SpanName::Operation, BTreeMap::new());
         let _dep = open_dep("d", None, BTreeMap::new());
+    }
+
+    thread_local! {
+        /// Root-close payloads observed by [`recording_sink`] on this thread.
+        static SINK_CAPTURES: RefCell<Vec<Vec<Span>>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// A test sink: it records each root-close payload on the *current* thread
+    /// and then re-inserts the drained spans into the thread-local buffer. The
+    /// re-insert makes the process-global sink transparent to every other test
+    /// in this binary — a with-sink root close then leaves exactly the same
+    /// buffer state as a no-sink root close, so no existing test can observe the
+    /// registration.
+    fn recording_sink(spans: &[Span]) {
+        SINK_CAPTURES.with(|c| c.borrow_mut().push(spans.to_vec()));
+        SPANS.with(|b| *b.borrow_mut() = spans.to_vec());
+    }
+
+    #[test]
+    fn root_close_exports_to_the_registered_sink() {
+        // Phase 1 — before any sink is registered (this test is the only
+        // `set_sink` caller in the binary), a root close must leave the buffer
+        // intact for the `take_spans()` golden path.
+        reset();
+        drop(open_span(SpanName::Operation, BTreeMap::new()));
+        assert_eq!(
+            SPANS.with(|b| b.borrow().len()),
+            1,
+            "no sink: root close does not drain the buffer"
+        );
+        let _ = take_spans();
+
+        // Phase 2 — register the sink (first registration wins) and prove the
+        // export fires exactly once, on root close, with the full drained tree.
+        SINK_CAPTURES.with(|c| c.borrow_mut().clear());
+        set_sink(recording_sink);
+
+        reset();
+        let root = open_span(SpanName::Run, BTreeMap::new());
+        let child = open_span(SpanName::Operation, BTreeMap::new());
+        drop(child);
+        assert!(
+            SINK_CAPTURES.with(|c| c.borrow().is_empty()),
+            "a nested (non-root) close must not export"
+        );
+        drop(root);
+        SINK_CAPTURES.with(|c| {
+            let calls = c.borrow();
+            assert_eq!(calls.len(), 1, "root close exports exactly once");
+            assert_eq!(calls[0].len(), 2, "the full two-span tree is drained");
+            assert_eq!(calls[0][0].name, SpanName::Run);
+            assert_eq!(calls[0][1].name, SpanName::Operation);
+        });
     }
 }

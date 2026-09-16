@@ -91,7 +91,7 @@ pub use registry::{
 pub use span::{
     EventName, Span, SpanEvent, SpanGuard, SpanName, SpanStatus, open_dep, open_operation,
     open_span, push_empty, push_error, push_event, push_fault, push_observation, push_result,
-    reset, set_status, take_spans,
+    reset, set_sink, set_status, take_spans,
 };
 pub use to_value::ToValue;
 pub use value::Value;

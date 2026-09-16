@@ -7,6 +7,7 @@ name = "annotations"
 version = "0.1.0"
 dependencies = [
  "annotations-macros",
+ "artifact",
  "runtime",
  "serde_json",
 ]
@@ -62,6 +63,7 @@ version = "0.1.0"
 dependencies = [
  "annotations",
  "artifact",
+ "serde_json",
 ]
 
 [[package]]
