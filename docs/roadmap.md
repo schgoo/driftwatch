@@ -218,10 +218,13 @@ that runs is the project's own suite. There is no command-execution surface.
   Keys:
   - `outdir` — artifact dir, default `target/driftwatch/`; `DRIFTWATCH_OUT_DIR`
     overrides. Precedence: env var > `outdir` > default.
-  - `[target] name` — the language-neutral `conformance.target.name` identity a
-    compare pairs on (resource.rs); default `CARGO_PKG_NAME`, **overridable** so a
-    Rust and a C# run of one component can declare the same target and diff
-    cross-language (`target.language` stays emitter-fixed, `"rust"` here).
+  - `[target] name` — the `conformance.target.name` **label** for the run
+    (optional; default derived from `CARGO_PKG_NAME`, caller-overridable). CTSC
+    0.2 defines it as a run label, **not** a pairing key — a compare pairs on
+    `conformance.component.id` (§Comparison), so target.name carries no
+    correlation weight and need not be language-neutral. It is still emitted
+    unconditionally (CTSC requires the resource attribute present);
+    `target.language` stays emitter-fixed (`"rust"` here).
   - `format` — trace serialization, `json` | `jsonl` (maps to `OtlpFormat`).
   - `clean` — wipe `outdir` before a run so a prior run's artifacts can't mix
     into a capture; default off.

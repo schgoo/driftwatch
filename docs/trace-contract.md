@@ -128,6 +128,11 @@ Tagged-union variant labels carry no type identity; that lives in the registry
 6. **Feature gating.** When tracing is disabled (Rust: `trace` feature off; C#:
    build symbol), annotations expand to identity; a purpose-built OTLP recorder is
    used — no OpenTelemetry SDK dependency.
+7. **Target name is a derived label.** `conformance.target.name` defaults to
+   the package name (`CARGO_PKG_NAME`) and is caller-overridable. Per CTSC it is
+   a run label, not a pairing key — comparison pairs on `conformance.component.id`
+   — so it carries no correlation weight and need not be language-neutral. The
+   attribute is always emitted (CTSC requires it present).
 
 ## Comparison & registry
 
