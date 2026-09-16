@@ -13,7 +13,7 @@ use crate::resource::Resource;
 const SCOPE_NAME: &str = "driftwatch.runtime";
 
 /// The CTSC schema URL emitted at `ScopeSpans` and `ResourceSpans` level.
-const SCHEMA_URL: &str = "https://driftwatch.dev/ctsc/schema/0.1.0";
+const SCHEMA_URL: &str = "https://driftwatch.dev/ctsc/schema/0.2.0";
 
 /// Builds the full OTLP `TracesData` object for one capture.
 pub(crate) fn traces_data(resource: &Resource, spans: &[Span]) -> Json {

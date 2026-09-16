@@ -168,7 +168,7 @@ fn required_resource_attributes_present() {
     let resource_attrs = &traces["resourceSpans"][0]["resource"]["attributes"];
     assert_eq!(
         any_value(resource_attrs, "conformance.version"),
-        &serde_json::json!({ "stringValue": "0.1.0" })
+        &serde_json::json!({ "stringValue": "0.2.0" })
     );
     for key in [
         "conformance.tool.name",

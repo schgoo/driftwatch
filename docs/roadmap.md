@@ -48,7 +48,7 @@ out of scope.
 
 ## Artifact format
 
-Driftwatch emits **CTSC 0.1** (see `docs/trace-contract.md`). One extraction
+Driftwatch emits **CTSC 0.2** (see `docs/trace-contract.md`). One extraction
 produces two CTSC artifacts:
 
 - **Registry** (`ctsc.registry`) — the normalized contract (registry → typed
@@ -64,7 +64,7 @@ value trace diff. The contract-diff **contextualizes** the trace-diff.
 
 ## Trace emission contract — CTSC producer profile
 
-Driftwatch emits **CTSC 0.1** (Conformance Trace Semantic Conventions):
+Driftwatch emits **CTSC 0.2** (Conformance Trace Semantic Conventions):
 OTLP-based conformance **Trace** + language-neutral **Registry** + **Comparison**
 policy. [`docs/trace-contract.md`](trace-contract.md) is Driftwatch's producer
 profile (annotation→CTSC mapping + producer choices); CTSC itself is normative.
@@ -122,7 +122,7 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
 - **#29** ✅ — `#[derive(Watchable)]`: structural struct/enum emission (includes the Watchable merge). Unblocks the struct/enum outcome clauses. ▪
 - **#30** ✅ — dependency-boundary tracer: per-arg inputs + real-call `.response`/`.error`, optional `?`. Observation-only (substitution dropped → #27). The original `#[watch_dep]` *attribute* form is **retired** — superseded by the expression-position `watch_dep!("name", <expr>)` function-like macro (transparent observer; unifies with `watch_point!`; non-call shapes are value-only, no `compile_error!`). ▪
 
-- **Emission contract ratified** ✅ — `docs/trace-contract.md` adopts CTSC 0.1 as Driftwatch's producer profile; D1–D5 resolved. Prereq for the emission items and the golden corpus.
+- **Emission contract ratified** ✅ — `docs/trace-contract.md` adopts CTSC 0.2 as Driftwatch's producer profile; D1–D5 resolved. Prereq for the emission items and the golden corpus.
 - **#37** ✅ — CTSC completion events: operation completion emits as
   `conformance.result`/`.empty`/`.error`, and dependencies as **nested
   `conformance.operation` spans** (own inputs + completion). Value carries via
@@ -278,7 +278,7 @@ runs are slow.
 ## Ratified decisions
 
 Emission-shape / canonicalization decisions (**D1–D5**) are **resolved** by
-adopting CTSC 0.1; see [`docs/trace-contract.md`](trace-contract.md).
+adopting CTSC 0.2; see [`docs/trace-contract.md`](trace-contract.md).
 
 - **D1** — macro naming: `watch_*` (final).
 - **D2** — operation/dependency unification: a dependency is a nested

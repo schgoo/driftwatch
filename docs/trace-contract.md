@@ -1,6 +1,6 @@
 # Driftwatch — CTSC producer profile
 
-Driftwatch emits **CTSC 0.1**. This document specifies only what Driftwatch
+Driftwatch emits **CTSC 0.2**. This document specifies only what Driftwatch
 decides within CTSC's producer latitude — the annotation→CTSC mapping and the
 source-language choices CTSC leaves open. CTSC's `trace.md`, `registry.md`, and
 `comparison.md` are **normative**; anything they fix is not restated here.
@@ -10,14 +10,21 @@ weaver — that emit the same CTSC. This profile is language-neutral; per-langua
 constructs appear as examples. Annotation names are written bare (`watch_operation`);
 each producer spells them idiomatically (`#[watch_operation]`, `[WatchOperation]`).
 
-**Status:** adopting CTSC 0.1 (draft). Sequencing lives in `docs/roadmap.md`.
+**Status:** adopting CTSC 0.2 (draft). Sequencing lives in `docs/roadmap.md`.
 The Rust emitter is implemented in the `artifact` crate: it serializes an
 in-memory capture (a caller-supplied `Resource` plus the runtime's
 `Vec<Span>`) to CTSC OTLP `TracesData` (`.otlp.json` / `.otlp.jsonl`). It emits
-the required resource attribute `conformance.version` = `"0.1.0"`, and a Rust
+the required resource attribute `conformance.version` = `"0.2.0"`, and a Rust
 panic wires as a `conformance.fault` whose `conformance.fault.type` is the
 language-neutral literal `"unexpected"` (chosen for cross-language comparability
 with the C# emitter).
+
+**Concurrency scope.** CTSC 0.2 §5 requires operation context to propagate
+across async boundaries, threads, thread pools, and channels. Driftwatch's
+current capture is **single-threaded**: it is CTSC-conformant for sequential and
+same-thread execution only. Async/parallel context propagation (roadmap
+#42/#53) is the path to full §5 conformance; until then, concurrent fan-out
+within a watched operation is out of contract.
 
 ## Artifacts
 
