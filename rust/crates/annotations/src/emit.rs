@@ -11,9 +11,14 @@
 //!
 //! There is no process-exit hook and no `unsafe`: the file stays current because
 //! every root close writes, so nothing needs flushing at exit.
+//!
+//! Capture integrity is **fail-closed** — a failed append (full disk, closed
+//! handle, partial write) aborts the process rather than continuing, so a
+//! truncated or malformed capture can never reach `compare` as a trusted oracle.
 
 use std::env;
 use std::fs::{self, File, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
@@ -54,21 +59,35 @@ fn emit_capture(spans: &[runtime::Span]) {
 
 /// Append one complete pre-rendered line under the writer lock.
 ///
-/// This runs from `SpanGuard::drop`, so it must never panic: a panic in `Drop`
-/// during unwinding aborts the whole process (double-panic), which is a strictly
-/// worse failure than a lost trace line. A poisoned lock only means another
-/// thread panicked mid-emit; the underlying writer stays valid, so recovering
-/// with `PoisonError::into_inner` and appending the next complete line is the
-/// safe termination behavior at this Drop boundary. The original panic is
-/// already surfaced by the panicking thread's own unwind.
+/// This runs from `SpanGuard::drop`, including while unwinding from a target
+/// panic (the fault-capture path), so it must never `panic!`: a panic in `Drop`
+/// during unwinding double-panics and aborts with a confusing diagnostic.
+///
+/// A *poisoned* lock only means another thread panicked mid-emit; the underlying
+/// writer stays valid (a `File` has no half-updated invariant), so we recover it
+/// with `PoisonError::into_inner` and append the next line — that thread's panic
+/// is already surfaced by its own unwind.
+///
+/// A genuine `write_all` **error** is different: the capture medium is broken and
+/// the on-disk artifact is now untrustworthy (a partial write can even leave a
+/// malformed half-line). Silently continuing would let a later `compare` treat
+/// corrupt bytes as an oracle, so we **fail closed**: emit a non-panicking
+/// diagnostic and `process::abort()`. `abort` — not `panic!` — is deterministic
+/// whether or not we are already unwinding and cannot double-panic.
 ///
 /// Taking the whole line as one locked `write_all` serializes concurrent
 /// threads: no partial line can interleave with another thread's line.
 fn append_line<W: std::io::Write>(writer: &Mutex<W>, line: &str) {
     let mut w = writer.lock().unwrap_or_else(PoisonError::into_inner);
-    // Best-effort append: a full disk / closed handle must not panic in Drop, so
-    // the `io::Result` is intentionally dropped rather than unwrapped.
-    let _ = w.write_all(line.as_bytes());
+    if w.write_all(line.as_bytes()).is_err() {
+        // Never-panic diagnostic (the `writeln!` Result is discarded), then a
+        // deterministic hard stop: a corrupt capture must not reach `compare`.
+        let _ = writeln!(
+            std::io::stderr(),
+            "driftwatch: FATAL: writing trace.otlp.jsonl failed; capture is corrupt, aborting"
+        );
+        std::process::abort();
+    }
 }
 
 /// Resolve config, build the resource, and open the append target once. Returns
@@ -171,5 +190,52 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(&*got, b"hello\n");
+    }
+
+    /// A writer whose every write fails, to drive `append_line`'s fail-closed
+    /// abort path.
+    struct FailWriter;
+    impl std::io::Write for FailWriter {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("boom"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Regression guard for the fail-closed contract: a `write_all` error must
+    /// abort the process, never silently continue, so a corrupt capture can never
+    /// reach `compare`. `process::abort` terminates the process, so this cannot be
+    /// asserted in-process: the parent re-invokes this exact test in a child (env
+    /// flag set) and asserts the child died abnormally and emitted the diagnostic.
+    #[test]
+    fn write_error_aborts_the_process() {
+        const CHILD_ENV: &str = "DW_APPEND_ABORT_CHILD";
+        const TEST_PATH: &str = "emit::tests::write_error_aborts_the_process";
+
+        if std::env::var_os(CHILD_ENV).is_some() {
+            // Child: this call must abort before returning. Reaching the line
+            // after it means the fail-closed guard was removed.
+            append_line(&Mutex::new(FailWriter), "line\n");
+            return;
+        }
+
+        let exe = std::env::current_exe().expect("current test binary");
+        let output = std::process::Command::new(exe)
+            .args(["--exact", "--nocapture", TEST_PATH])
+            .env(CHILD_ENV, "1")
+            .output()
+            .expect("spawn child test process");
+
+        assert!(
+            !output.status.success(),
+            "child should have aborted on the write error, but exited successfully"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("capture is corrupt"),
+            "expected the fail-closed diagnostic in child stderr, got: {stderr}"
+        );
     }
 }

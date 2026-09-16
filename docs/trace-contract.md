@@ -133,6 +133,14 @@ Tagged-union variant labels carry no type identity; that lives in the registry
    a run label, not a pairing key — comparison pairs on `conformance.component.id`
    — so it carries no correlation weight and need not be language-neutral. The
    attribute is always emitted (CTSC requires it present).
+8. **Capture integrity is fail-closed.** If appending a rendered line to the
+   trace artifact fails (full disk, closed handle, partial write), the emitter
+   prints a diagnostic and **aborts the process** rather than continuing — a
+   truncated or malformed capture must never be handed to a comparison as a
+   trusted oracle. (The Rust emitter uses `process::abort`, chosen over a panic
+   because emission can run while unwinding from a target fault.) A poisoned
+   writer lock — another thread panicked mid-emit — is recovered, not fatal; the
+   artifact file itself stays valid.
 
 ## Comparison & registry
 
