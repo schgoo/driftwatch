@@ -229,16 +229,23 @@ that runs is the project's own suite. There is no command-execution surface.
   Artifact file names are fixed convention (`registry.json`,
   `trace.otlp.jsonl`), not configurable. Parser is feature-gated so it stays out
   of production builds. ▪ ~250
-- **#8** — **auto-emit flush**: promote the thread-local span buffer
-  (`span.rs` `SPANS`, drained per-thread by `take_spans`) to a global,
-  cross-thread sink, and register a process-exit hook that renders the registry
-  (`runtime::discovery_json`) and the trace (`TraceCapture::to_otlp`) and writes
-  both to the resolved `outdir`. Feature-gated on `driftwatch`. `cargo test` is
-  multi-threaded, so the sink must aggregate across threads rather than flush a
-  single thread from `main`. ⚠ ~450
-- **#10** — **registry emission**: wire `discovery_json` into the flush and
-  confirm its output validates against the #6 `contract` crate; golden it. The
-  static normalization already exists in `runtime::registry`. ▪ ~250
+- **#8** — **export on span close** (OTel `SimpleSpanProcessor` model): when a
+  thread's root span closes (the `STACK`-empties branch of `SpanGuard::drop`),
+  drain that thread's completed span tree and **append** it as one
+  `TracesData` line to `trace.otlp.jsonl` in the resolved `outdir`. The file
+  stays current, so there is no end-of-process flush and no process-exit hook —
+  hence no `unsafe` (Rust has no safe stable atexit; `ctor`/`libc::atexit` are
+  FFI/linker tricks we avoid). A global `OnceLock<Mutex<Writer>>` serializes
+  appends so lines from concurrent test threads never interleave. `runtime`
+  cannot call `artifact` (the dep points the other way), so `runtime` exposes a
+  **sink callback** (`OnceLock<fn(&[Span])>`) the feature-gated emitter glue
+  registers; `SpanGuard::drop` invokes it on root close. Emitter always writes
+  `jsonl` (the CTSC §2 File Exporter shape); `format = "json"` is a CLI/snapshot
+  concern, not the live path. Feature-gated on `driftwatch`. ⚠ ~450
+- **#10** — **registry emission**: write `runtime::discovery_json` to
+  `registry.json` in the `outdir` once per run (a `OnceLock` on first span
+  export) and confirm its output validates against the #6 `contract` crate;
+  golden it. The static normalization already exists in `runtime::registry`. ▪ ~250
 
 
 ### Phase 5 — diff (new)
