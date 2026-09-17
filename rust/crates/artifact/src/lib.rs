@@ -4,7 +4,7 @@
 //! its [`Span`](runtime::Span)/[`SpanEvent`](runtime::SpanEvent) types) but does
 //! not persist them. This crate is that persistence boundary: it renders a
 //! [`TraceCapture`] — a caller-supplied [`Resource`] descriptor plus the drained
-//! `Vec<runtime::Span>` — into a **CTSC 0.1**-conformant OTLP `TracesData`
+//! `Vec<runtime::Span>` — into a **CTSC 0.2**-conformant OTLP `TracesData`
 //! JSON document (see `docs/trace-contract.md`).
 //!
 //! The recorder is purpose-built (CTSC §3 permits a hand-built producer); it

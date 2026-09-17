@@ -4,7 +4,7 @@ use runtime::Value;
 
 /// The CTSC conformance profile version this emitter targets. CTSC requires the
 /// `conformance.version` resource attribute to equal this exact string.
-pub const CONFORMANCE_VERSION: &str = "0.1.0";
+pub const CONFORMANCE_VERSION: &str = "0.2.0";
 
 /// The required CTSC Trace Core resource attributes, supplied by the caller.
 ///

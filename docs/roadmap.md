@@ -48,7 +48,7 @@ out of scope.
 
 ## Artifact format
 
-Driftwatch emits **CTSC 0.1** (see `docs/trace-contract.md`). One extraction
+Driftwatch emits **CTSC 0.2** (see `docs/trace-contract.md`). One extraction
 produces two CTSC artifacts:
 
 - **Registry** (`ctsc.registry`) — the normalized contract (registry → typed
@@ -64,7 +64,7 @@ value trace diff. The contract-diff **contextualizes** the trace-diff.
 
 ## Trace emission contract — CTSC producer profile
 
-Driftwatch emits **CTSC 0.1** (Conformance Trace Semantic Conventions):
+Driftwatch emits **CTSC 0.2** (Conformance Trace Semantic Conventions):
 OTLP-based conformance **Trace** + language-neutral **Registry** + **Comparison**
 policy. [`docs/trace-contract.md`](trace-contract.md) is Driftwatch's producer
 profile (annotation→CTSC mapping + producer choices); CTSC itself is normative.
@@ -122,7 +122,7 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
 - **#29** ✅ — `#[derive(Watchable)]`: structural struct/enum emission (includes the Watchable merge). Unblocks the struct/enum outcome clauses. ▪
 - **#30** ✅ — dependency-boundary tracer: per-arg inputs + real-call `.response`/`.error`, optional `?`. Observation-only (substitution dropped → #27). The original `#[watch_dep]` *attribute* form is **retired** — superseded by the expression-position `watch_dep!("name", <expr>)` function-like macro (transparent observer; unifies with `watch_point!`; non-call shapes are value-only, no `compile_error!`). ▪
 
-- **Emission contract ratified** ✅ — `docs/trace-contract.md` adopts CTSC 0.1 as Driftwatch's producer profile; D1–D5 resolved. Prereq for the emission items and the golden corpus.
+- **Emission contract ratified** ✅ — `docs/trace-contract.md` adopts CTSC 0.2 as Driftwatch's producer profile; D1–D5 resolved. Prereq for the emission items and the golden corpus.
 - **#37** ✅ — CTSC completion events: operation completion emits as
   `conformance.result`/`.empty`/`.error`, and dependencies as **nested
   `conformance.operation` spans** (own inputs + completion). Value carries via
@@ -218,10 +218,13 @@ that runs is the project's own suite. There is no command-execution surface.
   Keys:
   - `outdir` — artifact dir, default `target/driftwatch/`; `DRIFTWATCH_OUT_DIR`
     overrides. Precedence: env var > `outdir` > default.
-  - `[target] name` — the language-neutral `conformance.target.name` identity a
-    compare pairs on (resource.rs); default `CARGO_PKG_NAME`, **overridable** so a
-    Rust and a C# run of one component can declare the same target and diff
-    cross-language (`target.language` stays emitter-fixed, `"rust"` here).
+  - `[target] name` — the `conformance.target.name` **label** for the run
+    (optional; default derived from `CARGO_PKG_NAME`, caller-overridable). CTSC
+    0.2 defines it as a run label, **not** a pairing key — a compare pairs on
+    `conformance.component.id` (§Comparison), so target.name carries no
+    correlation weight and need not be language-neutral. It is still emitted
+    unconditionally (CTSC requires the resource attribute present);
+    `target.language` stays emitter-fixed (`"rust"` here).
   - `format` — trace serialization, `json` | `jsonl` (maps to `OtlpFormat`).
   - `clean` — wipe `outdir` before a run so a prior run's artifacts can't mix
     into a capture; default off.
@@ -229,21 +232,28 @@ that runs is the project's own suite. There is no command-execution surface.
   Artifact file names are fixed convention (`registry.json`,
   `trace.otlp.jsonl`), not configurable. Parser is feature-gated so it stays out
   of production builds. ▪ ~250
-- **#8** — **auto-emit flush**: promote the thread-local span buffer
-  (`span.rs` `SPANS`, drained per-thread by `take_spans`) to a global,
-  cross-thread sink, and register a process-exit hook that renders the registry
-  (`runtime::discovery_json`) and the trace (`TraceCapture::to_otlp`) and writes
-  both to the resolved `outdir`. Feature-gated on `driftwatch`. `cargo test` is
-  multi-threaded, so the sink must aggregate across threads rather than flush a
-  single thread from `main`. ⚠ ~450
-- **#10** — **registry emission**: wire `discovery_json` into the flush and
-  confirm its output validates against the #6 `contract` crate; golden it. The
-  static normalization already exists in `runtime::registry`. ▪ ~250
+- **#8** — **export on span close** (OTel `SimpleSpanProcessor` model): when a
+  thread's root span closes (the `STACK`-empties branch of `SpanGuard::drop`),
+  drain that thread's completed span tree and **append** it as one
+  `TracesData` line to `trace.otlp.jsonl` in the resolved `outdir`. The file
+  stays current, so there is no end-of-process flush and no process-exit hook —
+  hence no `unsafe` (Rust has no safe stable atexit; `ctor`/`libc::atexit` are
+  FFI/linker tricks we avoid). A global `OnceLock<Mutex<Writer>>` serializes
+  appends so lines from concurrent test threads never interleave. `runtime`
+  cannot call `artifact` (the dep points the other way), so `runtime` exposes a
+  **sink callback** (`OnceLock<fn(&[Span])>`) the feature-gated emitter glue
+  registers; `SpanGuard::drop` invokes it on root close. Emitter always writes
+  `jsonl` (the CTSC §2 File Exporter shape); `format = "json"` is a CLI/snapshot
+  concern, not the live path. Feature-gated on `driftwatch`. ⚠ ~450
+- **#10** — **registry emission**: write `runtime::discovery_json` to
+  `registry.json` in the `outdir` once per run (a `OnceLock` on first span
+  export) and confirm its output validates against the #6 `contract` crate;
+  golden it. The static normalization already exists in `runtime::registry`. ▪ ~250
 
 
 ### Phase 5 — diff (new)
 - **#12** — contract-diff: structural diff + breaking-change classification + report. ✚ ~450
-- **#13** — trace-diff: CTSC comparison (Strict) — pair operations, diff events/values, first-divergence report. ✚ ~450
+- **#13** — trace-diff: CTSC comparison under the **Strict** policy (`ctsc.strict/0.1.0`, optional). Comparison indexes on `conformance.component.id`, not `target.name`: within a component, operations pair **by position**, and paired operations must share `component.id` / `operation.name` / inputs; repeated invocations of one operation pair by order. Diff events/values; first-divergence report. A reorder-resilient identity-keyed variant is deferred to the comparison-engine build. ✚ ~450
 
 ### Phase 6 — CLI (new)
 - **#14** — CLI skeleton + `snapshot` (extract → artifact). ✚ ~300
@@ -271,7 +281,7 @@ runs are slow.
 ## Ratified decisions
 
 Emission-shape / canonicalization decisions (**D1–D5**) are **resolved** by
-adopting CTSC 0.1; see [`docs/trace-contract.md`](trace-contract.md).
+adopting CTSC 0.2; see [`docs/trace-contract.md`](trace-contract.md).
 
 - **D1** — macro naming: `watch_*` (final).
 - **D2** — operation/dependency unification: a dependency is a nested

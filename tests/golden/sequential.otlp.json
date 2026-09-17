@@ -6,7 +6,7 @@
           {
             "key": "conformance.version",
             "value": {
-              "stringValue": "0.1.0"
+              "stringValue": "0.2.0"
             }
           },
           {
@@ -35,10 +35,10 @@
           }
         ]
       },
-      "schemaUrl": "https://driftwatch.dev/ctsc/schema/0.1.0",
+      "schemaUrl": "https://driftwatch.dev/ctsc/schema/0.2.0",
       "scopeSpans": [
         {
-          "schemaUrl": "https://driftwatch.dev/ctsc/schema/0.1.0",
+          "schemaUrl": "https://driftwatch.dev/ctsc/schema/0.2.0",
           "scope": {
             "name": "driftwatch.runtime",
             "version": "0.1.0"
@@ -61,7 +61,7 @@
               "status": {
                 "code": 1
               },
-              "traceId": "11111111111111111111111111111101"
+              "traceId": "00000000000000000000000000000001"
             },
             {
               "attributes": [
@@ -87,7 +87,7 @@
               "status": {
                 "code": 1
               },
-              "traceId": "11111111111111111111111111111101"
+              "traceId": "00000000000000000000000000000001"
             },
             {
               "attributes": [
@@ -166,7 +166,7 @@
               "status": {
                 "code": 1
               },
-              "traceId": "11111111111111111111111111111101"
+              "traceId": "00000000000000000000000000000001"
             },
             {
               "attributes": [
@@ -221,7 +221,7 @@
               "status": {
                 "code": 1
               },
-              "traceId": "11111111111111111111111111111101"
+              "traceId": "00000000000000000000000000000001"
             }
           ]
         }

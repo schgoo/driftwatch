@@ -12,6 +12,15 @@ test:
     cd rust && cargo test --workspace
     cd rust && cargo test --workspace --all-features
 
+# Regenerate (bless) the golden corpus from live captures, then review the diff.
+[windows]
+bless:
+    cd rust; $env:DW_BLESS = "1"; cargo test -p golden --features driftwatch
+
+[unix]
+bless:
+    cd rust && DW_BLESS=1 cargo test -p golden --features driftwatch
+
 # Run clippy (warnings as errors), both feature configs
 clippy:
     cd rust && cargo clippy --workspace --all-targets -- -D warnings

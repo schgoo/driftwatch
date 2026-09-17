@@ -18,29 +18,41 @@ the harness that drives them.
 
 The harness, per fixture:
 
-1. `reset()`, then opens a `conformance.run` + `conformance.scenario` frame via
+1. On a **fresh spawned thread** (so the per-thread id/tick/trace counters
+   always start at zero — deterministic ids without any trace-id pinning), it
+   `reset()`s, then opens a `conformance.run` + `conformance.scenario` frame via
    `open_span` — this framing is the extraction driver's eventual job; until the
    `extract` crate exists, the harness supplies it.
 2. Invokes the **real annotated fixture operations** (`#[watch_operation]`,
    `watch_dep!`, `watch_point!`, `#[derive(Watchable)]`, panic→fault) inside the
    scenario. Their spans, inputs, events, values, and faults come from actual
    macro expansion — nothing is hand-shaped.
-3. Drains `take_spans()`, pins each span's `trace_id` to a fixed constant (the
-   trace id is an opaque correlator the comparator ignores; the per-thread trace
-   counter is otherwise nondeterministic across a parallel test run), pairs the
-   spans with a fixed `Resource`, and serializes via the emitter.
-4. Byte-compares against the on-disk golden, or — under `DW_BLESS=1` —
+3. Closing the root (run) span triggers the **live emit sink** (installed by
+   `annotations::install()` under `--features driftwatch`): it drains the
+   completed span tree, pairs it with the fixed `Resource`, and **appends** one
+   compact OTLP JSONL line to `trace.otlp.jsonl` in the resolved outdir — the
+   same production path that emits captures for a real run. A process-global
+   lock brackets each test's truncate → emit → read of that shared file so the
+   parallel test threads never race.
+4. The test reads that JSONL line back and byte-compares it against the on-disk
+   golden — a `.otlp.json` fixture is the line losslessly pretty-printed (a
+   `serde_json` round-trip; the emitter's canonical `BTreeMap` key order and
+   bare-int / CTSC-string numbers make this byte-exact), the streaming
+   `.otlp.jsonl` fixture is compared raw/compact — or, under `DW_BLESS=1`,
    regenerates it.
 
 ```
 # compare
-cargo test -p golden --features trace
+cargo test -p golden --features driftwatch
 # regenerate (review the diff before committing)
-DW_BLESS=1 cargo test -p golden --features trace
+DW_BLESS=1 cargo test -p golden --features driftwatch
 ```
 
-Span-id and tick counters re-zero on `reset()`, so everything except the trace
-id is deterministic by construction; the harness pins the trace id.
+Because each capture runs on a fresh thread, the span-id, tick, and trace-id
+counters all re-zero by construction — the whole trace (trace id included) is
+deterministic, so no trace-id pinning is needed. The first capture's trace id is
+the counter value `00000000000000000000000000000001`; a second capture on the
+same thread (the streaming golden) advances it to `…02`.
 
 ## Role in the test suite
 

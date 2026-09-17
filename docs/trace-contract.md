@@ -1,6 +1,6 @@
 # Driftwatch — CTSC producer profile
 
-Driftwatch emits **CTSC 0.1**. This document specifies only what Driftwatch
+Driftwatch emits **CTSC 0.2**. This document specifies only what Driftwatch
 decides within CTSC's producer latitude — the annotation→CTSC mapping and the
 source-language choices CTSC leaves open. CTSC's `trace.md`, `registry.md`, and
 `comparison.md` are **normative**; anything they fix is not restated here.
@@ -10,14 +10,21 @@ weaver — that emit the same CTSC. This profile is language-neutral; per-langua
 constructs appear as examples. Annotation names are written bare (`watch_operation`);
 each producer spells them idiomatically (`#[watch_operation]`, `[WatchOperation]`).
 
-**Status:** adopting CTSC 0.1 (draft). Sequencing lives in `docs/roadmap.md`.
+**Status:** adopting CTSC 0.2 (draft). Sequencing lives in `docs/roadmap.md`.
 The Rust emitter is implemented in the `artifact` crate: it serializes an
 in-memory capture (a caller-supplied `Resource` plus the runtime's
 `Vec<Span>`) to CTSC OTLP `TracesData` (`.otlp.json` / `.otlp.jsonl`). It emits
-the required resource attribute `conformance.version` = `"0.1.0"`, and a Rust
+the required resource attribute `conformance.version` = `"0.2.0"`, and a Rust
 panic wires as a `conformance.fault` whose `conformance.fault.type` is the
 language-neutral literal `"unexpected"` (chosen for cross-language comparability
 with the C# emitter).
+
+**Concurrency scope.** CTSC 0.2 §5 requires operation context to propagate
+across async boundaries, threads, thread pools, and channels. Driftwatch's
+current capture is **single-threaded**: it is CTSC-conformant for sequential and
+same-thread execution only. Async/parallel context propagation (roadmap
+#42/#53) is the path to full §5 conformance; until then, concurrent fan-out
+within a watched operation is out of contract.
 
 ## Artifacts
 
@@ -121,14 +128,31 @@ Tagged-union variant labels carry no type identity; that lives in the registry
 6. **Feature gating.** When tracing is disabled (Rust: `trace` feature off; C#:
    build symbol), annotations expand to identity; a purpose-built OTLP recorder is
    used — no OpenTelemetry SDK dependency.
+7. **Target name is a derived label.** `conformance.target.name` defaults to
+   the package name (`CARGO_PKG_NAME`) and is caller-overridable. Per CTSC it is
+   a run label, not a pairing key — comparison pairs on `conformance.component.id`
+   — so it carries no correlation weight and need not be language-neutral. The
+   attribute is always emitted (CTSC requires it present).
+8. **Capture integrity is fail-closed.** If appending a rendered line to the
+   trace artifact fails (full disk, closed handle, partial write), the emitter
+   prints a diagnostic and **aborts the process** rather than continuing — a
+   truncated or malformed capture must never be handed to a comparison as a
+   trusted oracle. (The Rust emitter uses `process::abort`, chosen over a panic
+   because emission can run while unwinding from a target fault.) A poisoned
+   writer lock — another thread panicked mid-emit — is recovered, not fatal; the
+   artifact file itself stays valid.
 
 ## Comparison & registry
 
-Default comparison policy: **CTSC Strict** (`ctsc.strict/0.1.0`) — sequential
-operations pair by position. If real captures show unstable operation ordering
-across versions, a Driftwatch custom policy may add input-keyed operation matching
-(CTSC §8). `discover` generates the CTSC Registry document from the link-time
-registry; Linked validation binds a trace to it.
+Default comparison policy: **CTSC Strict** (`ctsc.strict/0.1.0`, optional).
+Comparison indexes on `conformance.component.id`, not `target.name`: within a
+component, operations pair **by position**, and paired operations MUST share
+`component.id`, `operation.name`, and inputs; repeated invocations of one
+operation pair by order. If real captures show unstable operation ordering across
+versions, a Driftwatch custom policy may add input-keyed (identity) operation
+matching (CTSC §8), decided when the comparison engine is built. `discover`
+generates the CTSC Registry document from the link-time registry; Linked
+validation binds a trace to it.
 
 ## Change control
 

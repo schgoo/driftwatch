@@ -12,12 +12,18 @@ description = "Driftwatch golden trace corpus: reusable annotated fixture operat
 annotations.workspace = true
 artifact.workspace = true
 
+[dev-dependencies]
+serde_json.workspace = true
+
 [features]
 # Off by default: a plain build expands the annotations to identity, so the
 # fixture operations compile and emit nothing (and the goldens are skipped).
-# Enabling `trace` turns on emission — this is what drives the goldens.
+# Enabling `trace` turns on emission (macros expand into the runtime buffer).
+# `driftwatch` additionally installs the live root-close emit sink — this is
+# what drives the goldens through the real `trace.otlp.jsonl` file.
 default = []
 trace = ["annotations/trace"]
+driftwatch = ["annotations/driftwatch"]
 
 [lints]
 workspace = true

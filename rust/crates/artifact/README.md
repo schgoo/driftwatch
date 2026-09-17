@@ -9,7 +9,7 @@ The [`runtime`][__link0] crate builds an in-memory tree of `conformance.*` spans
 its [`Span`][__link1]/[`SpanEvent`][__link2] types) but does
 not persist them. This crate is that persistence boundary: it renders a
 [`TraceCapture`][__link3] — a caller-supplied [`Resource`][__link4] descriptor plus the drained
-`Vec<runtime::Span>` — into a **CTSC 0.1**-conformant OTLP `TracesData`
+`Vec<runtime::Span>` — into a **CTSC 0.2**-conformant OTLP `TracesData`
 JSON document (see `docs/trace-contract.md`).
 
 The recorder is purpose-built (CTSC §3 permits a hand-built producer); it

@@ -6,7 +6,7 @@ Shared planning context for humans and coding agents working on Driftwatch.
 
 - [Roadmap](roadmap.md) — architecture, artifact format, salvage map, and the
   PR-by-PR migration plan. **Read this first.**
-- [Trace emission contract](trace-contract.md) — Driftwatch's **CTSC 0.1 producer
+- [Trace emission contract](trace-contract.md) — Driftwatch's **CTSC 0.2 producer
   profile**: how each annotation maps to CTSC spans/events/values. The emitter
   phase and the golden corpus implement this.
 - [Value canonicalization](value-canonicalization.md) — why captured values are
