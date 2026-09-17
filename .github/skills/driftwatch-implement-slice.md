@@ -28,6 +28,7 @@ cargo test --workspace
 cargo evaluate
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt -- --check
+just readme-check   # per-crate cargo doc2readme --check
 ```
 
 Fix failures; never silence a lint or the evaluate gate to pass. Do not commit

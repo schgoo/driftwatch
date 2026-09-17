@@ -52,7 +52,7 @@ when scopes are independent.
 After every mutating action, delegate to `driftwatch-reviewer`, which inspects
 the diff independently and runs the harness:
 `cargo test` + `cargo evaluate` + `cargo clippy --all-targets -- -D warnings` +
-`cargo fmt --check`. An evaluate failure blocks like a clippy failure. On
+`cargo fmt --check` + `just readme-check`. An evaluate failure blocks like a clippy failure. On
 blocking findings, capture exact acceptance criteria, route to the responsible
 agent, and verify again. When only human review remains, stop and hand off.
 

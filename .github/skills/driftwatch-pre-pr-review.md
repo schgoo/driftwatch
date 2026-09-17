@@ -14,6 +14,7 @@ except for running the harness.
    cargo evaluate
    cargo clippy --workspace --all-targets -- -D warnings
    cargo fmt -- --check
+   just readme-check   # per-crate cargo doc2readme --check
    ```
    An evaluate failure is blocking, like a clippy failure.
 3. **Check acceptance:**

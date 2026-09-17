@@ -14,7 +14,7 @@ Read-only.
    - Observable outcome (what exists/works when done).
    - Exact files/crates in scope; boundaries that must not change.
    - Acceptance evidence: which harness commands must pass
-     (`cargo test` + `cargo evaluate` + `clippy -D warnings` + `fmt --check`).
+     (`cargo test` + `cargo evaluate` + `clippy -D warnings` + `fmt --check` + `readme-check`).
    - Target size (≤500 net LoC) and how to stay within it.
    - Human stop conditions.
 4. **Surface load-bearing decisions** (artifact format, trace canonicalization

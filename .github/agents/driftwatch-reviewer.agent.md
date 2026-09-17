@@ -16,7 +16,7 @@ Apply the `driftwatch-pre-pr-review` skill. You are behaviorally read-only:
 1. Inspect the actual diff — do not trust the implementer's summary.
 2. Run the harness independently:
    `cargo test` + `cargo evaluate` + `cargo clippy --all-targets -- -D warnings`
-   + `cargo fmt --check`. Before running repository-controlled code, inspect
+   + `cargo fmt --check` + `just readme-check` (per-crate README freshness). Before running repository-controlled code, inspect
    changes to manifests, build scripts, proc-macros, and task runners.
 3. Check against the PR's acceptance criteria: scope respected, ≤~500 net LoC,
    trust-anchor invariants preserved, no undeclared load-bearing decision baked
