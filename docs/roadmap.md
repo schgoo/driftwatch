@@ -102,7 +102,7 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
 
 ### Phase 0 — preserve & scaffold
 - **SpecGate #36 preservation** *(SpecGate repo — not tracked as a driftwatch issue)* — commit the source we lift from.
-- **#1** — driftwatch scaffold: `rust/` workspace, `rust/crates/`, justfile
+- **#1** ✅ — driftwatch scaffold: `rust/` workspace, `rust/crates/`, justfile
   (build/test/clippy/fmt + **`evaluate`**), Rust-only CI, licenses, `.gitignore`,
   toolchain, README — **plus the agent loop** (`AGENTS.md` +
   `.github/agents/*.agent.md` observe-plan-act-verify orchestrator +
@@ -110,7 +110,7 @@ Type: ▪ mechanical lift · ⚠ real refactor · ✚ net-new.
   **planning-doc tree** (`docs/README.md`, `docs/agentic-loop.md`,
   `docs/digests/{human,llm}.md`, `docs/references.md`) — modeled on
   `~/repos/dcf`. Wire **`cargo evaluate`** into the `check` recipe + CI as a
-  harness gate (with a starter `evaluate.toml`). ✚ ~450
+  harness gate (with a starter `evaluate.toml`). ✚ ~450 **Delivered in #21.**
 
 ### Phase 1 — emitter (extraction TCB)
 
@@ -188,13 +188,13 @@ All emitter work implements a clause of [`docs/trace-contract.md`](trace-contrac
   load-bearing
 
 ### Phase 2 — contract
-- **#6** — `contract`: model, parse, and validate the **CTSC Registry 0.2**
+- **#6** ✅ — `contract`: model, parse, and validate the **CTSC Registry 0.2**
   document (`ctsc.registry`, JSON) — the static contract `discover` (#10)
   generates. Serde model over `registry.md` + `ctsc-registry-0.2.schema.json`;
   cross-item validation (§4.1/§7/§8/§10) the JSON schema can't express. The
   artifact is `*.registry.json`, not the pre-CTSC `.contract.yaml`. Import-file
   loading + sha256 digest verification + cross-document type resolution (§6) are
-  deferred to a linked-validation follow-up. ⚠ ~450
+  deferred to a linked-validation follow-up. ⚠ ~450 **Delivered in #57** (serde model + `parse` + cross-item `validate`).
 - **#6.1** *(deferred; lower priority than the extraction chain)* — **linked
   (multi-document) registries**: import loading, `sha256:` digest verification,
   and cross-document named-type resolution (CTSC §6, §8 imported branch). Single
@@ -213,7 +213,7 @@ annotated ops, and on process exit the runtime flushes a **registry** + **trace*
 to an output dir. Driftwatch runs none of the project's commands: the only code
 that runs is the project's own suite. There is no command-execution surface.
 
-- **#7** — **capture config + output contract**: a repo-root `driftwatch.toml`
+- **#7** ✅ — **capture config + output contract**: a repo-root `driftwatch.toml`
   read by both the emitter (where/how to write) and the CLI (where to read).
   Keys:
   - `outdir` — artifact dir, default `target/driftwatch/`; `DRIFTWATCH_OUT_DIR`
@@ -231,8 +231,8 @@ that runs is the project's own suite. There is no command-execution surface.
 
   Artifact file names are fixed convention (`registry.json`,
   `trace.otlp.jsonl`), not configurable. Parser is feature-gated so it stays out
-  of production builds. ▪ ~250
-- **#8** — **export on span close** (OTel `SimpleSpanProcessor` model): when a
+  of production builds. ▪ ~250 **Delivered in #59** (`artifact::CaptureConfig`).
+- **#8** ✅ — **export on span close** (OTel `SimpleSpanProcessor` model): when a
   thread's root span closes (the `STACK`-empties branch of `SpanGuard::drop`),
   drain that thread's completed span tree and **append** it as one
   `TracesData` line to `trace.otlp.jsonl` in the resolved `outdir`. The file
@@ -244,7 +244,7 @@ that runs is the project's own suite. There is no command-execution surface.
   **sink callback** (`OnceLock<fn(&[Span])>`) the feature-gated emitter glue
   registers; `SpanGuard::drop` invokes it on root close. Emitter always writes
   `jsonl` (the CTSC §2 File Exporter shape); `format = "json"` is a CLI/snapshot
-  concern, not the live path. Feature-gated on `driftwatch`. ⚠ ~450
+  concern, not the live path. Feature-gated on `driftwatch`. ⚠ ~450 **Delivered in #60.**
 - **#10** — **registry emission**: write `runtime::discovery_json` to
   `registry.json` in the `outdir` once per run (a `OnceLock` on first span
   export) and confirm its output validates against the #6 `contract` crate;
