@@ -21,7 +21,7 @@ Apply the `driftwatch-implement-slice` skill.
 3. Add or move tests alongside the code. Keep the PR within ~500 net LoC.
 4. Validate before handing off:
    `cargo test` + `cargo evaluate` + `cargo clippy --all-targets -- -D warnings`
-   + `cargo fmt --check`. Fix failures; do not silence lints or the evaluate gate.
+   + `cargo fmt --check` + `just readme-check` (per-crate README freshness). Fix failures; do not silence lints or the evaluate gate.
 5. New unsafe / FFI / build scripts / proc-macros require an explicit safety
    contract and focused tests.
 
