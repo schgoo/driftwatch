@@ -39,6 +39,8 @@ pub use runtime::{
 #[cfg(feature = "driftwatch")]
 mod emit;
 #[cfg(feature = "driftwatch")]
+mod registry_emit;
+#[cfg(feature = "driftwatch")]
 pub use emit::install;
 
 /// Hidden plumbing the generated macro code funnels through. Not part of the

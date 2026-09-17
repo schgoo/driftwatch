@@ -8,6 +8,8 @@ version = "0.1.0"
 dependencies = [
  "annotations-macros",
  "artifact",
+ "contract",
+ "extract",
  "runtime",
  "serde_json",
 ]
@@ -68,6 +70,7 @@ version = "0.1.0"
 dependencies = [
  "annotations",
  "artifact",
+ "contract",
  "serde_json",
 ]
 

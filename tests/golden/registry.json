@@ -1,0 +1,265 @@
+{
+  "format": "ctsc.registry",
+  "formatVersion": "0.2.0",
+  "registryId": "golden-corpus",
+  "version": "0.0.0-dev",
+  "components": [
+    {
+      "id": "golden",
+      "operations": [],
+      "types": [
+        {
+          "kind": "tagged_union",
+          "name": "LookupError",
+          "variants": [
+            {
+              "name": "Timeout",
+              "payload": {
+                "kind": "record",
+                "fields": [
+                  {
+                    "name": "seconds",
+                    "type": {
+                      "kind": "primitive",
+                      "name": "i64"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "golden.faults",
+      "operations": [
+        {
+          "name": "boom",
+          "inputs": [
+            {
+              "name": "x",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        },
+        {
+          "name": "cascade_outer",
+          "inputs": [
+            {
+              "name": "n",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        }
+      ],
+      "types": []
+    },
+    {
+      "id": "golden.outcomes",
+      "operations": [
+        {
+          "name": "add",
+          "inputs": [
+            {
+              "name": "a",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            },
+            {
+              "name": "b",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        },
+        {
+          "name": "first_even",
+          "inputs": [
+            {
+              "name": "xs",
+              "type": {
+                "kind": "list",
+                "items": {
+                  "kind": "primitive",
+                  "name": "i64"
+                }
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            },
+            "empty": true
+          }
+        },
+        {
+          "name": "log_only",
+          "inputs": [
+            {
+              "name": "msg",
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {}
+        },
+        {
+          "name": "lookup",
+          "inputs": [
+            {
+              "name": "id",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            },
+            "errors": [
+              {
+                "name": "LookupError"
+              }
+            ]
+          }
+        }
+      ],
+      "types": []
+    },
+    {
+      "id": "golden.parsing",
+      "operations": [
+        {
+          "name": "to_int",
+          "inputs": [
+            {
+              "name": "text",
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        }
+      ],
+      "types": []
+    },
+    {
+      "id": "golden.pricing",
+      "operations": [
+        {
+          "name": "subtotal",
+          "inputs": [
+            {
+              "name": "unit_price",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            },
+            {
+              "name": "qty",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        },
+        {
+          "name": "with_tax",
+          "inputs": [
+            {
+              "name": "base",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        }
+      ],
+      "types": []
+    },
+    {
+      "id": "golden.values",
+      "operations": [
+        {
+          "name": "value_edges",
+          "inputs": [],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        }
+      ],
+      "types": []
+    }
+  ]
+}

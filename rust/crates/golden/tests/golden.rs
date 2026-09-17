@@ -17,8 +17,8 @@
 mod common;
 
 use common::{
-    compare_or_bless_json, compare_or_bless_jsonl, emit, emit_scenario, expect_panic, run_scenario,
-    supervisor_fault,
+    compare_or_bless_json, compare_or_bless_jsonl, compare_or_bless_registry, emit,
+    emit_registry_bytes, emit_scenario, expect_panic, run_scenario, supervisor_fault,
 };
 
 // --- Operation completion dispositions ---
@@ -187,4 +187,27 @@ fn jsonl_serializes_one_capture_per_line() {
         });
     });
     compare_or_bless_jsonl("streaming.otlp.jsonl", &emitted);
+}
+
+// --- Registry (contract) ---
+
+#[test]
+#[cfg_attr(
+    not(feature = "driftwatch"),
+    ignore = "requires the `driftwatch` feature"
+)]
+fn registry_emit_matches_golden_and_validates() {
+    // The live sink writes `registry.json` once per run, derived from every
+    // annotated fixture in this crate. Assert the emitted bytes are byte-exact
+    // against the committed golden AND that they parse + validate cleanly (zero
+    // §7/§8/§10 violations) through the `contract` oracle.
+    let emitted = emit_registry_bytes();
+    compare_or_bless_registry("registry.json", &emitted);
+
+    let doc = contract::RegistryDocument::parse(&emitted).expect("registry.json parses");
+    let violations = contract::validate(&doc);
+    assert!(
+        violations.is_empty(),
+        "emitted registry.json must validate cleanly, got: {violations:?}"
+    );
 }

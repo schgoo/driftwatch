@@ -234,3 +234,31 @@ pub fn compare_or_bless_json(name: &str, emitted: &str) {
 pub fn compare_or_bless_jsonl(name: &str, emitted: &str) {
     write_or_compare(name, emitted);
 }
+
+/// Drive one trivial capture so the sink's once-per-run init writes
+/// `registry.json`, then read those bytes back from the resolved outdir.
+///
+/// The registry is derived from the *link-time* discovery registry (every
+/// annotated fixture in this crate), not from what the probe scenario runs, and
+/// it is written once per process — so any emit cycle materializes it. It lives
+/// beside `trace.otlp.jsonl` (which the trace goldens truncate per cycle) and is
+/// read from its own stable path, never from the trace file.
+pub fn emit_registry_bytes() -> String {
+    // One trivial root-close triggers `init_state`, which writes the registry.
+    let _ = emit_scenario("registry_probe", 0, || {});
+    let path = {
+        let _guard = EMIT_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        setup()
+            .parent()
+            .expect("the trace path has a parent outdir")
+            .join("registry.json")
+    };
+    std::fs::read_to_string(&path).expect("read the emitted registry.json")
+}
+
+/// Byte-compare the emitted `registry.json` against its on-disk golden `name`
+/// (the emitter already writes pretty JSON + trailing newline, the committed
+/// on-disk form), or regenerate it under `DW_BLESS=1`.
+pub fn compare_or_bless_registry(name: &str, emitted: &str) {
+    write_or_compare(name, emitted);
+}
