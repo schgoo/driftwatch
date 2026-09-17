@@ -10,6 +10,14 @@
 //! (`result`/`empty`/`error`) after the body on every non-panicking return path,
 //! and registers an [`OpMeta`](crate::shared) entry into the link-time registry.
 
+// The expansion emits a `linkme` distributed-slice registration `static`
+// because annotations expand transparently inside arbitrary user functions,
+// with nowhere to thread an explicit `&Registry` handle — the same ambient
+// link-time design as `tracing`/`opentelemetry::global`; correctness rests on
+// the single-runtime-version invariant. File-scoped since the flagged `static`
+// lives inside `quote!` (acknowledging here, not injecting into generated code).
+#![cfg_attr(false, allow(evaluate::m_avoid_statics))]
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;

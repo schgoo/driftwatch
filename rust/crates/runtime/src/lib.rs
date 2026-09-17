@@ -85,6 +85,11 @@ pub use dep_observe::{
     DepObserveOther, DepObserveResult, DepObserveResultDebug, DepObserveToValue,
 };
 pub use panic::catch_unwind_fut;
+// Re-exports the ambient link-time registries: they are process-global by
+// design because annotations register from arbitrary user crates with no place
+// to thread an explicit registry (as with `tracing`/`opentelemetry::global`);
+// discovery correctness rests on the single-runtime-version invariant.
+#[cfg_attr(false, allow(evaluate::m_avoid_statics))]
 pub use registry::{
     DRIFTWATCH_OPS, DRIFTWATCH_TYPES, FieldMeta, OpMeta, TypeMeta, VariantMeta, discovery_json,
 };

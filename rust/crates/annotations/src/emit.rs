@@ -31,6 +31,11 @@ struct EmitState {
 /// Process-global emit state. `None` means "misconfigured" (e.g. a missing
 /// `[target] name`); the one-time warning already fired during init, so
 /// [`emit_capture`] then returns silently.
+// Ambient process-global emitter: annotation macros expand inside arbitrary
+// user functions with no place to thread an explicit handle, mirroring
+// `tracing`/`opentelemetry::global`; capture correctness rests on the
+// single-runtime-version invariant.
+#[cfg_attr(false, allow(evaluate::m_avoid_statics))]
 static STATE: OnceLock<Option<EmitState>> = OnceLock::new();
 
 /// Register the Driftwatch trace emitter with the runtime.

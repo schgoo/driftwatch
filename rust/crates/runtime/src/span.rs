@@ -48,6 +48,11 @@ use crate::Value;
 /// so the feature-gated emitter glue registers a callback here via [`set_sink`]
 /// and `SpanGuard::drop` invokes it on root close — the OpenTelemetry
 /// `SimpleSpanProcessor` export-on-close model, without any process-exit hook.
+// Ambient process-global root-close sink: the runtime cannot depend on the
+// artifact layer, so the emitter registers a callback here rather than
+// threading a handle through arbitrary annotated user code; correctness
+// rests on the single-runtime-version invariant.
+#[cfg_attr(false, allow(evaluate::m_avoid_statics))]
 static SINK: OnceLock<fn(&[Span])> = OnceLock::new();
 
 /// Register the root-close span sink. The first registration wins and later
@@ -194,6 +199,12 @@ struct Frame {
     buffer_index: usize,
 }
 
+// Ambient per-thread capture state: annotation macros expand transparently
+// inside arbitrary user code with no parameter to carry an explicit span
+// context, so the buffer is a thread-local — the same ambient design as
+// `tracing`; one capture per thread per process run under the single-runtime-
+// version invariant.
+#[cfg_attr(false, allow(evaluate::m_avoid_statics))]
 thread_local! {
     /// Spans opened on this thread, in open order.
     static SPANS: RefCell<Vec<Span>> = const { RefCell::new(Vec::new()) };
