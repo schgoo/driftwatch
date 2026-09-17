@@ -75,11 +75,18 @@ pub struct TypeMeta {
 
 /// Link-time registry of annotated operations, populated across compilation
 /// units and iterated by [`discovery_json`].
+// Deliberate ambient link-time registry: annotations register from arbitrary
+// user crates with no place to thread an explicit registry, mirroring
+// `tracing`/`opentelemetry::global`; discovery correctness rests on the
+// single-runtime-version invariant.
+#[cfg_attr(false, allow(evaluate::m_avoid_statics))]
 #[linkme::distributed_slice]
 pub static DRIFTWATCH_OPS: [OpMeta];
 
 /// Link-time registry of `Watchable`-deriving types, populated across
 /// compilation units and iterated by [`discovery_json`].
+// Same ambient link-time registry rationale as `DRIFTWATCH_OPS` above.
+#[cfg_attr(false, allow(evaluate::m_avoid_statics))]
 #[linkme::distributed_slice]
 pub static DRIFTWATCH_TYPES: [TypeMeta];
 
