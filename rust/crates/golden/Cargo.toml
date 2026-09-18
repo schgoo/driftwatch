@@ -15,6 +15,7 @@ artifact.workspace = true
 [dev-dependencies]
 serde_json.workspace = true
 contract.workspace = true
+anyhow.workspace = true
 
 [features]
 # Off by default: a plain build expands the annotations to identity, so the

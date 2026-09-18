@@ -19,6 +19,9 @@
 //!
 //! # Fixtures
 //!
+//! - [`aliases`] — an operation returning a foreign aliased `Result` whose error
+//!   channel the current string pipeline cannot see (the Tier-1 acceptance
+//!   case for the upcoming rust-analyzer resolver);
 //! - [`sequential`] — two operations in one scenario, one with an observation;
 //! - [`outcomes`] — the four completion dispositions (result / empty / unit /
 //!   error);
@@ -30,12 +33,14 @@
 //! harness itself (no annotation produces a supervisor fault, and streaming
 //! reuses two of the fixtures above).
 
+mod aliases;
 mod dependency;
 mod faults;
 mod outcomes;
 mod sequential;
 mod values;
 
+pub use aliases::first_byte;
 pub use dependency::to_int;
 pub use faults::{boom, cascade_outer};
 pub use outcomes::{LookupError, add, first_even, log_only, lookup};
