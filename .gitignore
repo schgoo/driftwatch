@@ -17,3 +17,5 @@ Thumbs.db
 
 # cargo-mutants output
 /rust/mutants.out*/
+# spikes (standalone research scratch; ignore Rust build output only)
+docs/spikes/**/target/

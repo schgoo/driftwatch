@@ -254,7 +254,62 @@ that runs is the project's own suite. There is no command-execution surface.
   emit + `[registry] version` / `DRIFTWATCH_VERSION` identity config + golden).
   `derive` sorts components by id and operations/types by name so the artifact
   is byte-reproducible across platforms (link-time order is not stable). ▪ ~250 **Delivered in #63 (10a) + #65 (10b).**
+  - **Phase R (resolver-fed front-half):** #10 is the issue Phase R supersedes.
+    Its build-time **string** type-resolution front-half — `10a`'s
+    `extract::derive` string driver, i.e. `extract::classify_return` /
+    `parse_type_ref` — is **replaced** by the RA static resolver, which produces
+    already-resolved `contract` types (`TypeRef` / observations / dependencies)
+    that feed `derive` directly (R-b redefines the `derive` seam per Gate #3;
+    R-c/R-d supply the resolved input). #10's *output* contract and its
+    byte-reproducibility guarantees are **unchanged** — only the type-resolution
+    front-half is swapped. Downstream Phase 5/6 (#12–#16) consume whatever
+    contract `derive` emits and are untouched by Phase R. See
+    [`docs/decisions/phase-r-static-resolver.md`](decisions/phase-r-static-resolver.md).
 
+
+### Phase R — Static Resolver (rust-analyzer type inference)
+
+Replaces the build-time **string** type pipeline (`extract::classify_return` /
+`parse_type_ref`) with an RA-backed **static resolver** that does real type
+inference, so type-aliased error channels are recovered. Inserted **after Phase
+3** per Gate #1. Annotations stay *selection / aiming* only. Full rationale,
+ratified gates, and the deferred-item record:
+[`docs/decisions/phase-r-static-resolver.md`](decisions/phase-r-static-resolver.md).
+Feasibility proof (**GO, with constraints**):
+[`docs/spikes/ra-extract/REPORT.md`](spikes/ra-extract/REPORT.md). Acceptance
+oracle: `tests/golden/resolved-registry.json` +
+`rust/crates/golden/tests/resolver_pending.rs`
+(`resolver_reproduces_resolved_registry`, red-by-design `#[ignore]`).
+
+**Ratified gates (do not reopen — see the decision record):**
+
+- **Gate #1 (placement)** — new Phase R after Phase 3; **supersedes the
+  build-time string type-resolution front-half of #10** (registry emission —
+  `10a`'s `extract::derive` string driver: `classify_return` / `parse_type_ref`).
+  #10's output contract and byte-reproducibility are unchanged; only the
+  front-half is replaced (see the note on the #10 entry). Downstream Phase 5/6
+  consumers (#12–#16) are untouched.
+- **Gate #2 (dep/toolchain)** — RA is feature-gated under the same feature that
+  gates tracing/extraction (`trace` / `driftwatch`); with tracing off,
+  `ra_ap_*` and its rustc-1.96 pin are never pulled. When enabled, RA runs on
+  **every** extraction — the **default** path, not an add-on.
+- **Gate #3 (derive seam)** — `extract::derive()` is redefined to accept
+  already-resolved `contract` types (`TypeRef` / observations / dependencies)
+  and relocated to the registry/contract layer, shedding the string parsers
+  (R-b).
+- **Gate #4 (ty)** — errors stay **name-only** (`ErrorOutcome.ty` = `None`);
+  cross-language foreign-error name canonicalization is **DEFERRED**
+  (trace-contract-owned).
+
+**PR sequence (≤500 net LoC each):**
+
+| PR | Scope |
+|---|---|
+| **R-a** *(doc-only)* | Track the spike into `docs/spikes/ra-extract/`; write the decision record; add this roadmap stub + renumber/cross-reference notes. No crate/test/oracle changes. |
+| **R-b** | Redefine `derive()` over resolved `contract` types (Gate #3), relocate to the registry layer, adapt the legacy string path. Harness stays green. |
+| **R-c** | New feature-gated resolver crate: pinned `ra_ap_*=0.0.349` + `unicode-ident=1.0.22`, `ProcMacroServerChoice::None` + source pre-scan; resolve a target to resolved observations. Adapts the spike PoC. |
+| **R-d** | Wire the resolver into `extract` as the **default** path (runs every extraction, feature-gated, Gate #2); `watch_point!` / `watch_dep!` token→expr mapping (PARTIAL risks flagged in the spike). |
+| **R-e** | Delete the red-by-design `#[ignore]` on `resolver_reproduces_resolved_registry`; retire the superseded string parsers. **The oracle flipping green is the acceptance gate.** |
 
 ### Phase 5 — diff (new)
 - **#12** — contract-diff: structural diff + breaking-change classification + report. ✚ ~450
@@ -273,8 +328,12 @@ that runs is the project's own suite. There is no command-execution surface.
 
 ## Dependencies & critical path
 
-Linear within phases: 1→2→3→4→5. Phase 2 independent after scaffold. Phase 7
-branches after Phase 1.
+Linear within phases: 1→2→3→R→5. Phase 2 independent after scaffold. Phase 7
+branches after Phase 1. **Phase R** sits after Phase 3 and re-backs **#10's**
+type-resolution front-half with the RA resolver; #10 still emits the same
+contract (byte-reproducible), so downstream Phase 5/6 (#12–#16) are untouched
+consumers. Phase R's own PRs are linear R-a→R-e (R-b→R-c→R-d build the
+seam/crate/wiring, R-e flips the acceptance oracle green).
 
 **Fastest path to a real demo (contract-diff — cheap, un-gameable, no trace
 driver or C# needed):** #1 → #6 → #10 → #12 → #14 → #15.
@@ -300,6 +359,12 @@ Also settled:
 - Artifact format: **CTSC OTLP JSON** (`.otlp.json`/`.otlp.jsonl`) — owned by #11.
 - Ship contract-diff (#12) before trace-diff (#13): metadata drift is the cheap,
   always-available, coverage-independent first product.
+- **Phase R (static resolver)** — replace the build-time string type-resolution
+  front-half of **#10** (`extract::derive`'s `classify_return` / `parse_type_ref`)
+  with an RA-backed resolver; #10's output contract is unchanged. Four gates
+  ratified (placement / dep-gating / `derive()` seam / name-only `ty`) with
+  foreign-error canonicalization deferred. Full record:
+  [`docs/decisions/phase-r-static-resolver.md`](decisions/phase-r-static-resolver.md).
 
 Changing any of these requires human ratification and a corpus update
 (`trace-contract.md` §Change control).
