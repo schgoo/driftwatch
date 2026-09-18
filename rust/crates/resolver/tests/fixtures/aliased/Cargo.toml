@@ -1,0 +1,16 @@
+[package]
+name = "aliased-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# An isolated workspace root so this fixture is not pulled into the outer
+# Driftwatch workspace; rust-analyzer loads it standalone during the test.
+[workspace]
+
+[lib]
+name = "aliased_fixture"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
