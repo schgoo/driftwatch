@@ -20,9 +20,17 @@ pub const CONFIG_FILE_NAME: &str = "driftwatch.toml";
 /// The environment variable that overrides [`CaptureConfig::outdir`].
 pub const OUTDIR_ENV: &str = "DRIFTWATCH_OUT_DIR";
 
+/// The environment variable that overrides the resolved registry `version`
+/// (see [`CaptureConfig::resolve_registry_version`]).
+pub const VERSION_ENV: &str = "DRIFTWATCH_VERSION";
+
 /// The built-in output directory used when neither the env var nor the config
 /// file specifies one.
 const DEFAULT_OUTDIR: &str = "target/driftwatch";
+
+/// The fallback registry `version` stamped when neither [`VERSION_ENV`] nor the
+/// `[registry] version` config key supplies one.
+const DEFAULT_VERSION: &str = "0.0.0-dev";
 
 /// The resolved capture configuration: where to write artifacts, how to
 /// serialize the trace, and the target identity to stamp on the capture.
@@ -39,6 +47,10 @@ pub struct CaptureConfig {
     /// of one component must declare the *same* target so they diff
     /// cross-language.
     pub target_name: Option<String>,
+    /// The registry `version` (registry.md §2) from the `[registry] version`
+    /// config key. `None` means "unset"; [`CaptureConfig::resolve_registry_version`]
+    /// then falls back through [`VERSION_ENV`] to [`DEFAULT_VERSION`].
+    pub registry_version: Option<String>,
     /// The trace serialization format. Defaults to [`OtlpFormat::Jsonl`].
     pub format: OtlpFormat,
     /// Whether to wipe [`CaptureConfig::outdir`] before a run so a prior run's
@@ -51,6 +63,7 @@ impl Default for CaptureConfig {
         CaptureConfig {
             outdir: PathBuf::from(DEFAULT_OUTDIR),
             target_name: None,
+            registry_version: None,
             format: OtlpFormat::Jsonl,
             clean: false,
         }
@@ -104,6 +117,21 @@ impl CaptureConfig {
         env::var_os(OUTDIR_ENV).map(PathBuf::from)
     }
 
+    /// The [`VERSION_ENV`] override, if the variable is set and non-empty. Read
+    /// here rather than in the pure `from_raw` path (mirroring
+    /// [`CaptureConfig::outdir_env_override`]) so parsing stays deterministic.
+    #[must_use]
+    pub fn version_env_override() -> Option<String> {
+        env::var(VERSION_ENV).ok().filter(|v| !v.is_empty())
+    }
+
+    /// Resolve the registry `version` to stamp on a derived registry document,
+    /// with precedence [`VERSION_ENV`] > `[registry] version` > [`DEFAULT_VERSION`].
+    #[must_use]
+    pub fn resolve_registry_version(&self) -> String {
+        resolve_version(Self::version_env_override(), self.registry_version.clone())
+    }
+
     /// Apply an output-directory override (typically
     /// [`CaptureConfig::outdir_env_override`]), giving it precedence over the
     /// config file. A `None` override leaves [`CaptureConfig::outdir`] untouched.
@@ -120,10 +148,20 @@ impl CaptureConfig {
         CaptureConfig {
             outdir: raw.outdir.map_or(defaults.outdir, PathBuf::from),
             target_name: raw.target.and_then(|target| target.name),
+            registry_version: raw.registry.and_then(|registry| registry.version),
             format: raw.format.map_or(defaults.format, RawFormat::into_otlp),
             clean: raw.clean.unwrap_or(defaults.clean),
         }
     }
+}
+
+/// Apply the registry-version precedence: env override > config key > default.
+/// Kept as a free function (env-free) so the precedence is unit-testable without
+/// mutating the process environment (which is `unsafe` under edition 2024).
+fn resolve_version(env_override: Option<String>, config_version: Option<String>) -> String {
+    env_override
+        .or(config_version)
+        .unwrap_or_else(|| DEFAULT_VERSION.to_string())
 }
 
 /// The raw TOML shape, before defaults are applied.
@@ -134,6 +172,7 @@ struct RawConfig {
     format: Option<RawFormat>,
     clean: Option<bool>,
     target: Option<RawTarget>,
+    registry: Option<RawRegistry>,
 }
 
 /// The `[target]` table.
@@ -141,6 +180,13 @@ struct RawConfig {
 #[serde(deny_unknown_fields)]
 struct RawTarget {
     name: Option<String>,
+}
+
+/// The `[registry]` table.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRegistry {
+    version: Option<String>,
 }
 
 /// The `format` key's accepted values, mapped onto [`OtlpFormat`].
@@ -249,6 +295,37 @@ mod tests {
         let err = CaptureConfig::parse("[target]\nversion = \"1\"")
             .expect_err("unknown target key rejected");
         assert!(matches!(err, ConfigError::Parse(_)));
+    }
+
+    #[test]
+    fn registry_version_when_set_is_carried() {
+        let config = CaptureConfig::parse("[registry]\nversion = \"2.1.0\"").expect("valid config");
+        assert_eq!(config.registry_version.as_deref(), Some("2.1.0"));
+    }
+
+    #[test]
+    fn unknown_registry_key_when_parsed_is_parse_error() {
+        let err = CaptureConfig::parse("[registry]\nid = \"x\"")
+            .expect_err("unknown registry key rejected");
+        assert!(matches!(err, ConfigError::Parse(_)));
+    }
+
+    #[test]
+    fn registry_version_when_unset_resolves_to_default() {
+        let version = super::resolve_version(None, None);
+        assert_eq!(version, "0.0.0-dev");
+    }
+
+    #[test]
+    fn registry_version_config_wins_over_default() {
+        let version = super::resolve_version(None, Some("1.2.3".to_string()));
+        assert_eq!(version, "1.2.3");
+    }
+
+    #[test]
+    fn registry_version_env_wins_over_config() {
+        let version = super::resolve_version(Some("9.9.9".to_string()), Some("1.2.3".to_string()));
+        assert_eq!(version, "9.9.9");
     }
 
     #[test]

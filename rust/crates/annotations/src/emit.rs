@@ -116,12 +116,6 @@ fn init_state() -> Option<EmitState> {
         return None;
     };
 
-    // `CARGO_PKG_VERSION` here is the driftwatch tool version; the CTSC
-    // `conformance.version` resource attribute is injected separately by
-    // `artifact::Resource`.
-    let resource =
-        artifact::Resource::new("driftwatch", env!("CARGO_PKG_VERSION"), target_name, "rust");
-
     if let Err(err) = fs::create_dir_all(&config.outdir) {
         eprintln!(
             "driftwatch: cannot create outdir {}: {err}; skipping trace emission",
@@ -129,6 +123,17 @@ fn init_state() -> Option<EmitState> {
         );
         return None;
     }
+
+    // Shares this gate: derive + write `registry.json` once alongside the trace.
+    // A failure here only warns (see `registry_emit`); it never blocks the trace.
+    crate::registry_emit::emit_registry(&config, &target_name);
+
+    // `CARGO_PKG_VERSION` here is the driftwatch tool version; the CTSC
+    // `conformance.version` resource attribute is injected separately by
+    // `artifact::Resource`.
+    let resource =
+        artifact::Resource::new("driftwatch", env!("CARGO_PKG_VERSION"), target_name, "rust");
+
     let path = config.outdir.join("trace.otlp.jsonl");
     if config.clean {
         // `clean` runs exactly once, here in the OnceLock init.

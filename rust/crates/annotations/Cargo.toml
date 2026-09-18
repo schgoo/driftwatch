@@ -12,6 +12,9 @@ description = "Driftwatch annotation surface: the user-facing facade over the ru
 runtime.workspace = true
 annotations-macros.workspace = true
 artifact = { workspace = true, optional = true }
+extract = { workspace = true, optional = true }
+contract = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true
@@ -22,8 +25,15 @@ serde_json.workspace = true
 default = []
 trace = ["annotations-macros/trace"]
 # The live auto-emit path: turns on `trace` emission and pulls in the artifact
-# emitter glue that appends each root-close span tree to `trace.otlp.jsonl`.
-driftwatch = ["trace", "dep:artifact"]
+# emitter glue that appends each root-close span tree to `trace.otlp.jsonl`,
+# plus the `extract` derivation + `contract` model that write `registry.json`.
+driftwatch = [
+    "trace",
+    "dep:artifact",
+    "dep:extract",
+    "dep:contract",
+    "dep:serde_json",
+]
 
 [lints]
 workspace = true

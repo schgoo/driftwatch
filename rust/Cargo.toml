@@ -76,6 +76,8 @@ proc-macro2 = "1"
 runtime = { path = "crates/runtime" }
 # The CTSC registry contract model the extraction driver derives into.
 contract = { path = "crates/contract" }
+# The extraction driver: derives a registry document from runtime discovery.
+extract = { path = "crates/extract" }
 annotations-macros = { path = "crates/annotations-macros" }
 annotations = { path = "crates/annotations" }
 artifact = { path = "crates/artifact" }

@@ -12,8 +12,11 @@
 //! Operations and types are grouped by their `OpMeta.component`/
 //! `TypeMeta.component` tag, emitting one [`contract::Component`] per distinct
 //! tag under `components[]` (a component is never top-level; even a lone
-//! component nests here). Components appear in first-encounter order for
-//! determinism. Each derived component gets an empty `dependencies` list:
+//! component nests here). Components are sorted by `id`, and within each
+//! component operations and types are sorted by `name`, so the derived
+//! document is byte-reproducible regardless of the (platform-dependent)
+//! link-time registry order. Each derived component gets an empty
+//! `dependencies` list:
 //! deriving cross-component `dependencies[]` from cross-component `Named`
 //! references is deferred, so a reference that crosses a component boundary
 //! surfaces as a `contract::validate` dangling-reference violation (§8) until
@@ -72,22 +75,17 @@ pub fn derive(ops: &[OpMeta], types: &[TypeMeta], identity: RegistryIdentity) ->
     }
 }
 
-/// The distinct component tags across the (non-setup) operations and types, in
-/// first-encounter order.
+/// The distinct component tags across the (non-setup) operations and types,
+/// sorted by tag so the derived document is order-stable regardless of the
+/// (platform-dependent) link-time registry order.
 fn component_ids<'a>(ops: &'a [OpMeta], types: &'a [TypeMeta]) -> Vec<&'a str> {
-    let mut seen = BTreeSet::new();
-    let mut order = Vec::new();
-    for cid in ops
-        .iter()
+    ops.iter()
         .filter(|op| !op.is_setup)
         .map(|op| op.component)
         .chain(types.iter().map(|t| t.component))
-    {
-        if seen.insert(cid) {
-            order.push(cid);
-        }
-    }
-    order
+        .collect::<BTreeSet<&str>>()
+        .into_iter()
+        .collect()
 }
 
 /// Build the [`Component`] for one component tag from the operations and types
@@ -98,20 +96,26 @@ fn derive_component(
     types: &[TypeMeta],
     known: &BTreeSet<&str>,
 ) -> Component {
+    let mut operations: Vec<Operation> = ops
+        .iter()
+        .filter(|op| !op.is_setup && op.component == cid)
+        .map(|op| derive_operation(op, known))
+        .collect();
+    operations.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let mut named_types: Vec<NamedType> = types
+        .iter()
+        .filter(|t| t.component == cid)
+        .map(|t| derive_named_type(t, known))
+        .collect();
+    named_types.sort_by(|a, b| a.name().cmp(b.name()));
+
     Component {
         id: cid.to_string(),
         description: None,
         dependencies: Vec::new(),
-        operations: ops
-            .iter()
-            .filter(|op| !op.is_setup && op.component == cid)
-            .map(|op| derive_operation(op, known))
-            .collect(),
-        types: types
-            .iter()
-            .filter(|t| t.component == cid)
-            .map(|t| derive_named_type(t, known))
-            .collect(),
+        operations,
+        types: named_types,
     }
 }
 

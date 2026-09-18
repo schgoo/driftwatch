@@ -58,7 +58,7 @@ assert!(json.contains("\"resourceSpans\""));
 
 Part of the [Driftwatch](https://github.com/schgoo/driftwatch) project.
 
- [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQboqibkVMHhDYbsIucyRmUcFMbuAQPX9MW8kEbDGbMhNPSaGBhZIKCaGFydGlmYWN0ZTAuMS4wgmdydW50aW1lZTAuMS4w
+ [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQbuta021aP6YIbdDhDpLMlds8b2tVIRPiCO8wbdb4-COFkmu1hZIKCaGFydGlmYWN0ZTAuMS4wgmdydW50aW1lZTAuMS4w
  [__link0]: https://crates.io/crates/runtime/0.1.0
  [__link1]: https://docs.rs/runtime/0.1.0/runtime/?search=Span
  [__link2]: https://docs.rs/runtime/0.1.0/runtime/?search=SpanEvent
