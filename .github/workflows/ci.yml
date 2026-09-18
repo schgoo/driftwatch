@@ -84,9 +84,11 @@ jobs:
         run: |
           cargo doc2readme -p annotations --lib --template crates/README.j2 --out crates/annotations/README.md --check
           cargo doc2readme -p annotations-macros --lib --template crates/README.j2 --out crates/annotations-macros/README.md --check
+          cargo doc2readme -p artifact --lib --template crates/README.j2 --out crates/artifact/README.md --check
           cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md --check
           cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md --check
           cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md --check
+          cargo doc2readme -p golden --lib --template crates/README.j2 --out crates/golden/README.md --check
           cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md --check
       - name: Coverage
         if: success() || failure()
