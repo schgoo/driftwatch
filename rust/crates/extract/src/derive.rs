@@ -7,20 +7,15 @@
 //! `runtime::discovery_json`, so `runtime` stays untouched and callers (and
 //! tests) can hand it fixture slices.
 //!
-//! ## Component grouping
-//!
-//! Operations and types are grouped by their `OpMeta.component`/
-//! `TypeMeta.component` tag, emitting one [`contract::Component`] per distinct
-//! tag under `components[]` (a component is never top-level; even a lone
-//! component nests here). Components are sorted by `id`, and within each
-//! component operations and types are sorted by `name`, so the derived
-//! document is byte-reproducible regardless of the (platform-dependent)
-//! link-time registry order. Each derived component gets an empty
-//! `dependencies` list:
-//! deriving cross-component `dependencies[]` from cross-component `Named`
-//! references is deferred, so a reference that crosses a component boundary
-//! surfaces as a `contract::validate` dangling-reference violation (§8) until
-//! that slice lands.
+//! This is the front-half (string lowering) of derivation: it lowers each
+//! `OpMeta`/`TypeMeta` into a resolved contract [`contract::Operation`]/
+//! [`contract::NamedType`] (via [`parse_type_ref`]/[`classify_return`]), builds
+//! the [`contract::ResolvedOperation`]/[`contract::ResolvedType`] IR, then hands
+//! off to [`contract::assemble`] for component grouping, sorting, the
+//! default-component fallback, and the document envelope. Keeping the two seams
+//! apart lets a future static resolver feed already-resolved contract types
+//! straight into [`contract::assemble`] without routing back through the string
+//! parsers here.
 //!
 //! `registryId`/`version` come solely from the [`RegistryIdentity`] parameter
 //! (config/env resolution is roadmap #10b); a component's `id` comes solely
@@ -29,7 +24,7 @@
 use std::collections::BTreeSet;
 
 use contract::{
-    Component, FORMAT, FORMAT_VERSION, Field, NamedType, NamedValue, Operation, RegistryDocument,
+    Field, NamedType, NamedValue, Operation, RegistryDocument, ResolvedOperation, ResolvedType,
     TypeRef, Variant,
 };
 use runtime::{OpMeta, TypeMeta, VariantMeta};
@@ -38,85 +33,39 @@ use crate::identity::RegistryIdentity;
 use crate::return_kind::classify_return;
 use crate::type_ref::parse_type_ref;
 
-/// The component id used only when the registry carries no operations or types,
-/// so the document still declares the CTSC-required one-or-more components.
-const DEFAULT_COMPONENT: &str = "default";
-
 /// Derive a CTSC registry document from runtime discovery metadata.
 ///
 /// Setups (`OpMeta::is_setup`) are wiring helpers, not contract operations, so
 /// they are excluded from the derived operations (and from component grouping).
+/// The setup exclusion is enforced by [`contract::assemble`] from the
+/// `is_setup` flag carried on each [`ResolvedOperation`].
 #[must_use]
 pub fn derive(ops: &[OpMeta], types: &[TypeMeta], identity: RegistryIdentity) -> RegistryDocument {
     let known: BTreeSet<&str> = types.iter().map(|t| t.name).collect();
 
-    let mut components: Vec<Component> = component_ids(ops, types)
-        .into_iter()
-        .map(|cid| derive_component(cid, ops, types, &known))
-        .collect();
-    if components.is_empty() {
-        components.push(Component {
-            id: DEFAULT_COMPONENT.to_string(),
-            description: None,
-            dependencies: Vec::new(),
-            operations: Vec::new(),
-            types: Vec::new(),
-        });
-    }
-
-    RegistryDocument {
-        format: FORMAT.to_string(),
-        format_version: FORMAT_VERSION.to_string(),
-        registry_id: identity.registry_id,
-        version: identity.version,
-        description: None,
-        imports: Vec::new(),
-        components,
-    }
-}
-
-/// The distinct component tags across the (non-setup) operations and types,
-/// sorted by tag so the derived document is order-stable regardless of the
-/// (platform-dependent) link-time registry order.
-fn component_ids<'a>(ops: &'a [OpMeta], types: &'a [TypeMeta]) -> Vec<&'a str> {
-    ops.iter()
-        .filter(|op| !op.is_setup)
-        .map(|op| op.component)
-        .chain(types.iter().map(|t| t.component))
-        .collect::<BTreeSet<&str>>()
-        .into_iter()
-        .collect()
-}
-
-/// Build the [`Component`] for one component tag from the operations and types
-/// that carry it.
-fn derive_component(
-    cid: &str,
-    ops: &[OpMeta],
-    types: &[TypeMeta],
-    known: &BTreeSet<&str>,
-) -> Component {
-    let mut operations: Vec<Operation> = ops
+    let resolved_ops: Vec<ResolvedOperation> = ops
         .iter()
-        .filter(|op| !op.is_setup && op.component == cid)
-        .map(|op| derive_operation(op, known))
+        .map(|op| ResolvedOperation {
+            component: op.component.to_string(),
+            is_setup: op.is_setup,
+            operation: derive_operation(op, &known),
+        })
         .collect();
-    operations.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let mut named_types: Vec<NamedType> = types
+    let resolved_types: Vec<ResolvedType> = types
         .iter()
-        .filter(|t| t.component == cid)
-        .map(|t| derive_named_type(t, known))
+        .map(|t| ResolvedType {
+            component: t.component.to_string(),
+            named_type: derive_named_type(t, &known),
+        })
         .collect();
-    named_types.sort_by(|a, b| a.name().cmp(b.name()));
 
-    Component {
-        id: cid.to_string(),
-        description: None,
-        dependencies: Vec::new(),
-        operations,
-        types: named_types,
-    }
+    contract::assemble(
+        &resolved_ops,
+        &resolved_types,
+        identity.registry_id,
+        identity.version,
+    )
 }
 
 /// Lower one `OpMeta` into a contract [`Operation`]: parameters become inputs;
@@ -197,8 +146,12 @@ fn derive_variant(variant: &VariantMeta, known: &BTreeSet<&str>) -> Variant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use contract::validate;
+    use contract::{FORMAT, FORMAT_VERSION, validate};
     use runtime::FieldMeta;
+
+    /// Mirrors the private `contract::assemble::DEFAULT_COMPONENT` fallback id,
+    /// so the empty-registry adapter test keeps asserting the same value.
+    const DEFAULT_COMPONENT: &str = "default";
 
     fn identity() -> RegistryIdentity {
         RegistryIdentity {

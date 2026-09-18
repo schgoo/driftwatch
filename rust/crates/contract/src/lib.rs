@@ -24,6 +24,7 @@
 //! assert!(contract::validate(&doc).is_empty());
 //! ```
 
+mod assemble;
 mod component;
 mod document;
 mod named_type;
@@ -31,6 +32,7 @@ mod operation;
 mod type_ref;
 mod validate;
 
+pub use assemble::{ResolvedOperation, ResolvedType, assemble};
 pub use component::{Component, Dependency, Import};
 pub use document::{FORMAT, FORMAT_VERSION, ParseError, RegistryDocument};
 pub use named_type::NamedType;
