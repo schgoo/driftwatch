@@ -15,6 +15,20 @@ behavior — no hand-authored assertion to weaken.
 
 - **Phase: 1 (emitter).** `rust/` workspace + crate scaffold exist (`runtime`, `annotations(-macros)`, `artifact`, `contract`, `extract`, `diff`, `cli`); the emitter crates are implemented through the annotation surface (#1-#4, #29-#30 merged), CTSC emission (#37-#40) is complete, and the CTSC OTLP artifact emitter (#11) serializes a capture to `.otlp.json`/`.otlp.jsonl`. The trace golden corpus (#5) is the trust anchor, and mutation testing (#24, `just mutants`) validated it at 0 survivors.
 - Migration plan: `docs/roadmap.md` (issue-numbered work items, phases 0–7).
+- **Phase R (static resolver): planned/started.** Replaces the build-time
+  *string* type-resolution front-half of **#10** (registry emission —
+  `extract::derive`'s `classify_return`/`parse_type_ref`) with an
+  rust-analyzer resolver so type-aliased error channels are recovered; #10's
+  output contract stays byte-reproducible and downstream Phase 5/6 (#12–#16)
+  consumers are untouched. Four
+  gates ratified (placement after Phase 3 / same-feature dep-gating, RA is the
+  default path when on / `derive()` redefined over resolved `contract` types /
+  errors stay name-only, foreign-error canonicalization deferred). Feasibility
+  spike tracked at `docs/spikes/ra-extract/` (GO, with constraints); decision
+  record `docs/decisions/phase-r-static-resolver.md`; PRs R-a…R-e. Acceptance
+  gate: the red-by-design `#[ignore]` on `resolver_reproduces_resolved_registry`
+  (`rust/crates/golden/tests/resolver_pending.rs` +
+  `tests/golden/resolved-registry.json`) flips green.
 - Origin: clean-room reboot of SpecGate; lift the extraction half, drop the
   TDD/matcher half.
 

@@ -14,6 +14,13 @@ Shared planning context for humans and coding agents working on Driftwatch.
   semantic-naming escape hatch for representation-independent identity.
 - [Agentic loop](agentic-loop.md) — how the orchestrator observes, plans,
   delegates to specialists, and verifies before human PR review.
+- [Decision records](decisions/) — durable, human-ratified decisions:
+  - [Phase R — Static Resolver](decisions/phase-r-static-resolver.md) — replace
+    the build-time string type pipeline with an rust-analyzer static resolver.
+- [Spikes](spikes/) — frozen feasibility artifacts (outside the `rust/`
+  workspace, not built by CI):
+  - [`ra-extract`](spikes/ra-extract/REPORT.md) — rust-analyzer static-resolver
+    PoC backing Phase R (GO, with constraints).
 - [LLM digest](digests/llm.md) — operational facts and decision boundaries for
   agents.
 - [Human digest](digests/human.md) — concise status, ownership, and risks.
