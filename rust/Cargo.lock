@@ -16,6 +16,7 @@ dependencies = [
  "artifact",
  "contract",
  "extract",
+ "resolver",
  "runtime",
  "serde_json",
 ]

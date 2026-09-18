@@ -56,6 +56,15 @@ pub struct CaptureConfig {
     /// Whether to wipe [`CaptureConfig::outdir`] before a run so a prior run's
     /// artifacts cannot mix into this capture. Defaults to `false`.
     pub clean: bool,
+    /// The optional target-crate source root (a crate directory holding a
+    /// `Cargo.toml`, or the manifest path itself) the static resolver aims
+    /// rust-analyzer at, from the `[resolver] source` config key. `None` means
+    /// "unset"; the emitter then keeps the link-time (string-pipeline)
+    /// derivation. When set (and the emitter is built with the `resolve`
+    /// feature), the registry is produced by resolving this source instead. A
+    /// relative path resolves against the process working directory, like
+    /// [`CaptureConfig::outdir`].
+    pub resolver_source: Option<PathBuf>,
 }
 
 impl Default for CaptureConfig {
@@ -66,6 +75,7 @@ impl Default for CaptureConfig {
             registry_version: None,
             format: OtlpFormat::Jsonl,
             clean: false,
+            resolver_source: None,
         }
     }
 }
@@ -151,6 +161,10 @@ impl CaptureConfig {
             registry_version: raw.registry.and_then(|registry| registry.version),
             format: raw.format.map_or(defaults.format, RawFormat::into_otlp),
             clean: raw.clean.unwrap_or(defaults.clean),
+            resolver_source: raw
+                .resolver
+                .and_then(|resolver| resolver.source)
+                .map(PathBuf::from),
         }
     }
 }
@@ -173,6 +187,7 @@ struct RawConfig {
     clean: Option<bool>,
     target: Option<RawTarget>,
     registry: Option<RawRegistry>,
+    resolver: Option<RawResolver>,
 }
 
 /// The `[target]` table.
@@ -187,6 +202,13 @@ struct RawTarget {
 #[serde(deny_unknown_fields)]
 struct RawRegistry {
     version: Option<String>,
+}
+
+/// The `[resolver]` table.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawResolver {
+    source: Option<String>,
 }
 
 /// The `format` key's accepted values, mapped onto [`OtlpFormat`].
@@ -307,6 +329,26 @@ mod tests {
     fn unknown_registry_key_when_parsed_is_parse_error() {
         let err = CaptureConfig::parse("[registry]\nid = \"x\"")
             .expect_err("unknown registry key rejected");
+        assert!(matches!(err, ConfigError::Parse(_)));
+    }
+
+    #[test]
+    fn resolver_source_when_unset_is_none() {
+        let config = CaptureConfig::parse("").expect("empty config parses");
+        assert_eq!(config.resolver_source, None);
+    }
+
+    #[test]
+    fn resolver_source_when_set_is_carried() {
+        let config =
+            CaptureConfig::parse("[resolver]\nsource = \"crates/target\"").expect("valid config");
+        assert_eq!(config.resolver_source, Some(PathBuf::from("crates/target")));
+    }
+
+    #[test]
+    fn unknown_resolver_key_when_parsed_is_parse_error() {
+        let err = CaptureConfig::parse("[resolver]\nroot = \"x\"")
+            .expect_err("unknown resolver key rejected");
         assert!(matches!(err, ConfigError::Parse(_)));
     }
 
