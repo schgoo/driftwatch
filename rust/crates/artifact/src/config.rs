@@ -56,14 +56,13 @@ pub struct CaptureConfig {
     /// Whether to wipe [`CaptureConfig::outdir`] before a run so a prior run's
     /// artifacts cannot mix into this capture. Defaults to `false`.
     pub clean: bool,
-    /// The optional target-crate source root (a crate directory holding a
-    /// `Cargo.toml`, or the manifest path itself) the static resolver aims
-    /// rust-analyzer at, from the `[resolver] source` config key. `None` means
-    /// "unset"; the emitter then keeps the link-time (string-pipeline)
-    /// derivation. When set (and the emitter is built with the `resolve`
-    /// feature), the registry is produced by resolving this source instead. A
-    /// relative path resolves against the process working directory, like
-    /// [`CaptureConfig::outdir`].
+    /// An explicit override of the target-crate source root (a crate directory
+    /// holding a `Cargo.toml`, or the manifest path itself) the static resolver
+    /// aims rust-analyzer at, from the `[resolver] source` config key. `None`
+    /// means "unset"; the emitter then defaults to the runtime
+    /// `CARGO_MANIFEST_DIR` of the process under capture. When set, the resolver
+    /// resolves this source instead. A relative path resolves against the
+    /// process working directory, like [`CaptureConfig::outdir`].
     pub resolver_source: Option<PathBuf>,
 }
 

@@ -34,6 +34,20 @@ pub(crate) fn component_for(
     "crate".to_owned()
 }
 
+/// The owning crate's name as a component tag.
+///
+/// `#[derive(Watchable)]` types carry no explicit `component = "…"` selector, so
+/// their component must mirror the runtime derive, which stamps each
+/// `TypeMeta`'s component with the crate's `CARGO_PKG_NAME` — the owning crate's
+/// name, *not* the declaring module path. Falls back to the `"crate"` sentinel
+/// only when the crate has no display name.
+pub(crate) fn crate_component(db: &RootDatabase, module: Module) -> String {
+    module
+        .krate(db)
+        .display_name(db)
+        .map_or_else(|| "crate".to_owned(), |name| name.to_string())
+}
+
 /// The `::`-joined HIR module path of `module` (empty for the crate root).
 pub(crate) fn module_path(
     db: &RootDatabase,

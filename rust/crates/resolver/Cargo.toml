@@ -29,8 +29,8 @@ unicode-ident = { workspace = true, optional = true }
 
 [features]
 # When enabled, RA resolution is real; when disabled, the heavy/pinned RA deps
-# are absent from the build. R-d wires `extract`'s trace/extraction feature to
-# forward `resolver/ra`.
+# are absent from the build. `annotations/driftwatch` forwards `resolver/ra` so
+# the default registry-emit path resolves with rust-analyzer.
 ra = [
     "dep:ra_ap_hir",
     "dep:ra_ap_ide",

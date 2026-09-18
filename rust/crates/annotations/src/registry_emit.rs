@@ -6,32 +6,24 @@
 //! `RegistryDocument::parse` — and writes `<outdir>/registry.json` alongside the
 //! trace.
 //!
-//! There are two ways the document is derived:
-//!
-//! - **Link-time (default).** Derive from the discovery registry
-//!   (`runtime::DRIFTWATCH_OPS` / `runtime::DRIFTWATCH_TYPES`) via
-//!   [`extract::derive`] — the alias-blind string pipeline. This is the only
-//!   path unless the `resolve` feature is compiled in *and* a source is set.
-//! - **Static resolver (opt-in, `resolve` feature).** When built with the
-//!   `resolve` feature *and* `driftwatch.toml` sets a `[resolver] source`, the
-//!   emitter resolves that target crate with rust-analyzer
-//!   ([`resolver::resolve`]) — recovering alias-hidden error channels the string
-//!   path drops — and assembles the registry from the resolved IR via
-//!   [`contract::assemble`]. With no `[resolver] source` configured the emitter
-//!   keeps the link-time path, so the `resolve` feature is purely additive: it
-//!   never changes default behavior (the Tier-1 golden stays byte-identical even
-//!   under `--all-features`).
+//! The document is produced by the **static resolver**: the emitter resolves the
+//! target crate with rust-analyzer ([`resolver::resolve`]) — recovering
+//! alias-hidden error channels a string pipeline would drop — and assembles the
+//! registry from the resolved IR via [`contract::assemble`]. The source crate is
+//! the runtime `CARGO_MANIFEST_DIR` of the process under capture by default; a
+//! `[resolver] source` in `driftwatch.toml`
+//! ([`artifact::CaptureConfig::resolver_source`]) is an explicit override.
 //!
 //! It shares the trace-emit gate: [`crate::emit::init_state`] only calls this
 //! once it has resolved a `[target] name` (which is also the `registryId`) and
 //! created the outdir, so when the trace path soft-skips the registry does too.
-//! Any derivation/resolution/serialization/write failure here **warns to stderr
-//! and skips** the registry — it never aborts the process and never breaks trace
+//! Any resolution/serialization/write failure here **warns to stderr and
+//! skips** the registry — it never aborts the process and never breaks trace
 //! emission. An empty registry (no operations *and* no types) is skipped
-//! entirely so the `extract` `"default"`-component fallback never surfaces in a
-//! live artifact.
+//! entirely so no synthetic component ever surfaces in a live artifact.
 
 use std::fs;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 /// Guards the once-per-run registry write. The first successful reach here
@@ -49,44 +41,36 @@ pub(crate) fn emit_registry(config: &artifact::CaptureConfig, target_name: &str)
     REGISTRY_WRITTEN.get_or_init(|| write_registry(config, target_name));
 }
 
-/// Route the once-per-run write: the static-resolver path when the `resolve`
-/// feature is compiled *and* a `[resolver] source` is configured, otherwise the
-/// link-time derivation. Keeping the resolver path gated on an explicit source
-/// (not on the feature alone) is what makes `resolve` purely additive.
+/// Resolve the source crate and write the registry once. The source is the
+/// explicit `[resolver] source` override when configured, otherwise the runtime
+/// `CARGO_MANIFEST_DIR` of the process under capture (never the compile-time
+/// `env!` of *this* crate, and never the cwd — which the harness relocates to a
+/// tempdir with no `Cargo.toml`). With no source available, the registry is
+/// skipped (warn, never abort).
 fn write_registry(config: &artifact::CaptureConfig, target_name: &str) {
-    #[cfg(feature = "resolve")]
-    if let Some(source) = config.resolver_source.as_deref() {
-        write_resolved_registry(config, target_name, source);
+    let Some(source) = resolver_source(config) else {
+        eprintln!(
+            "driftwatch: no resolver source (set `[resolver] source` or run under cargo so \
+             CARGO_MANIFEST_DIR is set); skipping registry"
+        );
         return;
-    }
-    write_derived_registry(config, target_name);
-}
-
-/// The link-time derivation path: skip an empty registry, otherwise
-/// derive → serialize → write, warning to stderr on any error.
-fn write_derived_registry(config: &artifact::CaptureConfig, target_name: &str) {
-    let ops = &runtime::DRIFTWATCH_OPS;
-    let types = &runtime::DRIFTWATCH_TYPES;
-
-    // Empty-registry guard: no operations and no types → do not emit a synthetic
-    // `"default"`-component document (roadmap #10b, decision 4).
-    if ops.is_empty() && types.is_empty() {
-        return;
-    }
-
-    let identity = extract::RegistryIdentity {
-        registry_id: target_name.to_string(),
-        version: config.resolve_registry_version(),
     };
-    let document = extract::derive(ops, types, identity);
-    write_document(config, &document);
+    write_resolved_registry(config, target_name, &source);
 }
 
-/// The static-resolver path (`resolve` feature): resolve `source` with
-/// rust-analyzer, then assemble the registry from the alias-resolved IR. A
-/// [`resolver::ResolveError`] warns to stderr and skips the registry — it never
-/// aborts the run or breaks trace emission (mirroring the write failure policy).
-#[cfg(feature = "resolve")]
+/// The crate the resolver aims at: the explicit `[resolver] source` override, or
+/// the runtime `CARGO_MANIFEST_DIR` of the process under capture.
+fn resolver_source(config: &artifact::CaptureConfig) -> Option<PathBuf> {
+    config
+        .resolver_source
+        .clone()
+        .or_else(|| std::env::var_os("CARGO_MANIFEST_DIR").map(PathBuf::from))
+}
+
+/// Resolve `source` with rust-analyzer, then assemble the registry from the
+/// alias-resolved IR. A [`resolver::ResolveError`] warns to stderr and skips the
+/// registry — it never aborts the run or breaks trace emission (mirroring the
+/// write failure policy).
 fn write_resolved_registry(
     config: &artifact::CaptureConfig,
     target_name: &str,
@@ -104,8 +88,8 @@ fn write_resolved_registry(
         }
     };
 
-    // Empty-registry guard, applied to the resolved IR (mirrors the link-time
-    // path): a target with no operations and no types emits no document.
+    // Empty-registry guard: a target with no operations and no types emits no
+    // document, so no synthetic component ever surfaces in a live artifact.
     if resolved.operations.is_empty() && resolved.types.is_empty() {
         return;
     }

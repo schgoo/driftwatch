@@ -25,14 +25,15 @@ the goldens run only under the `driftwatch` feature (which turns on the
 ## Fixtures
 
 * [`aliases`][__link1] — an operation returning a foreign aliased `Result` whose error
-  channel the current string pipeline cannot see (the Tier-1 acceptance
-  case for the upcoming rust-analyzer resolver);
+  channel the static resolver recovers through real type inference;
 * [`sequential`][__link2] — two operations in one scenario, one with an observation;
 * [`outcomes`][__link3] — the four completion dispositions (result / empty / unit /
   error);
-* [`values`][__link4] — every CTSC §8 value type and edge via `watch_point!`;
-* [`dependency`][__link5] — an operation with a `watch_dep!` nested call;
-* [`faults`][__link6] — a panicking operation and a panicking dependency cascade.
+* [`pending`][__link4] — alias-hidden channels the resolver recovers (a `Watchable`
+  error, foreign-error collisions, an alias→primitive baseline);
+* [`values`][__link5] — every CTSC §8 value type and edge via `watch_point!`;
+* [`dependency`][__link6] — an operation with a `watch_dep!` nested call;
+* [`faults`][__link7] — a panicking operation and a panicking dependency cascade.
 
 The supervisor fault and the streaming (`.jsonl`) golden are assembled by the
 harness itself (no annotation produces a supervisor fault, and streaming
@@ -43,11 +44,12 @@ reuses two of the fixtures above).
 
 Part of the [Driftwatch](https://github.com/schgoo/driftwatch) project.
 
- [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQbRz868_MnkxIbWD-6KY7QWxwbM-XSHisBcIAbO4V8F2fR1KhhZIeCZ2FsaWFzZXP2gmhhcnRpZmFjdGUwLjEuMIJqZGVwZW5kZW5jefaCZmZhdWx0c_aCaG91dGNvbWVz9oJqc2VxdWVudGlhbPaCZnZhbHVlc_Y
+ [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQbdwjtpz4j5IobE97MP2J8Jo4b8sdBsWejLikbXIeBJp_sFOphZIiCZ2FsaWFzZXP2gmhhcnRpZmFjdGUwLjEuMIJqZGVwZW5kZW5jefaCZmZhdWx0c_aCaG91dGNvbWVz9oJncGVuZGluZ_aCanNlcXVlbnRpYWz2gmZ2YWx1ZXP2
  [__link0]: https://crates.io/crates/artifact/0.1.0
  [__link1]: https://crates.io/crates/aliases
  [__link2]: https://crates.io/crates/sequential
  [__link3]: https://crates.io/crates/outcomes
- [__link4]: https://crates.io/crates/values
- [__link5]: https://crates.io/crates/dependency
- [__link6]: https://crates.io/crates/faults
+ [__link4]: https://crates.io/crates/pending
+ [__link5]: https://crates.io/crates/values
+ [__link6]: https://crates.io/crates/dependency
+ [__link7]: https://crates.io/crates/faults

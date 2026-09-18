@@ -9,9 +9,9 @@ The Driftwatch static resolver.
 library to statically resolve a target crate’s annotated operations and
 `#[derive(Watchable)]` types into the **already-resolved** contract IR:
 [`contract::ResolvedOperation`][__link1] / [`contract::ResolvedType`][__link2]. It is the
-type-aware replacement for the alias-blind string front-half in `extract`:
-real type inference sees through `type` aliases and foreign `Result` aliases
-(`io::Result`, `anyhow::Result`) that the string pipeline cannot, recovering
+type-aware successor to the retired alias-blind string pipeline: real type
+inference sees through `type` aliases and foreign `Result` aliases
+(`io::Result`, `anyhow::Result`) that a string classifier cannot, recovering
 the hidden error channels.
 
 The output feeds straight into [`contract::assemble`][__link3]: each
@@ -55,7 +55,7 @@ let _doc = contract::assemble(
 
 Part of the [Driftwatch](https://github.com/schgoo/driftwatch) project.
 
- [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQbiyppwtKiPkob9PXeeqoYV8Ub8w74ydSvlgYba68CiGh47DhhZIKCaGNvbnRyYWN0ZTAuMS4wgmhyZXNvbHZlcmUwLjEuMA
+ [__cargo_doc2readme_dependencies_info]: ggGmYW0CYXZlMC43LjNhdIQbczlzGuhUQj4bPuh9UW2lL-EbW470-h7a1-0bxL56aHOBGtZhYvRhcoQby1wiTnSwlSkb0ta3h1xJjtMbgZHP9h_LDGUb8yyhoy3wGl5hZIKCaGNvbnRyYWN0ZTAuMS4wgmhyZXNvbHZlcmUwLjEuMA
  [__link0]: https://rust-analyzer.github.io/
  [__link1]: https://docs.rs/contract/0.1.0/contract/?search=ResolvedOperation
  [__link2]: https://docs.rs/contract/0.1.0/contract/?search=ResolvedType
