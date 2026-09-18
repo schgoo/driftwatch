@@ -245,10 +245,15 @@ that runs is the project's own suite. There is no command-execution surface.
   registers; `SpanGuard::drop` invokes it on root close. Emitter always writes
   `jsonl` (the CTSC §2 File Exporter shape); `format = "json"` is a CLI/snapshot
   concern, not the live path. Feature-gated on `driftwatch`. ⚠ ~450 **Delivered in #60.**
-- **#10** — **registry emission**: write `runtime::discovery_json` to
-  `registry.json` in the `outdir` once per run (a `OnceLock` on first span
-  export) and confirm its output validates against the #6 `contract` crate;
-  golden it. The static normalization already exists in `runtime::registry`. ▪ ~250
+- **#10** ✅ — **registry emission**: derive a CTSC `RegistryDocument` from the
+  link-time discovery metadata and write `registry.json` in the `outdir` once
+  per run (a `OnceLock` on first span export), validated against the #6
+  `contract` crate and goldened. Split into **10a** (a pure `extract::derive`
+  driver over the typed `runtime::OpMeta`/`TypeMeta` slices — not
+  `runtime::discovery_json`, so `runtime` stays untouched) and **10b** (live
+  emit + `[registry] version` / `DRIFTWATCH_VERSION` identity config + golden).
+  `derive` sorts components by id and operations/types by name so the artifact
+  is byte-reproducible across platforms (link-time order is not stable). ▪ ~250 **Delivered in #63 (10a) + #65 (10b).**
 
 
 ### Phase 5 — diff (new)
