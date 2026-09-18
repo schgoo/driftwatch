@@ -88,3 +88,7 @@ serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 # TOML parser for the driftwatch.toml capture config.
 toml = "0.8"
+# Genuinely foreign error type for the resolver-oracle harness (dev-only): its
+# opaque `anyhow::Error` cannot derive `Watchable`, so it exercises foreign
+# error-channel recovery — see `crates/golden/tests/resolver_pending.rs`.
+anyhow = "1"

@@ -32,6 +32,31 @@
       ]
     },
     {
+      "id": "golden.aliases",
+      "operations": [
+        {
+          "name": "first_byte",
+          "inputs": [
+            {
+              "name": "text",
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            }
+          }
+        }
+      ],
+      "types": []
+    },
+    {
       "id": "golden.faults",
       "operations": [
         {
