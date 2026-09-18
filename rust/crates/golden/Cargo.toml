@@ -26,6 +26,11 @@ anyhow.workspace = true
 default = []
 trace = ["annotations/trace"]
 driftwatch = ["annotations/driftwatch"]
+# Additive resolver-emit proof (Phase R). Turns on the annotations `resolve`
+# capability so `tests/resolve_emit.rs` can drive the rust-analyzer-backed
+# registry-emit path over a fixture crate. Implies `driftwatch` for the live
+# emit sink.
+resolve = ["driftwatch", "annotations/resolve"]
 
 [lints]
 workspace = true
