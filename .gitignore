@@ -1,5 +1,7 @@
 # Rust
 /rust/target/
+# Nested build output from in-crate test fixtures (their own workspaces).
+**/tests/fixtures/**/target/
 **/*.rs.bk
 
 # C#
