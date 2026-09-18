@@ -66,13 +66,19 @@ fn recovers_aliased_error_channels_and_decomposes_watchable_enum() {
     // name-only `Error` — the spec-sanctioned collision.
     assert_i64_named_error(operation(&resolved.operations, "parse_amount"), "Error");
 
-    // The `#[derive(Watchable)]` enum decomposes into a tagged union.
-    let charge_error = resolved
+    // The `#[derive(Watchable)]` enum decomposes into a tagged union, tagged
+    // with the owning crate's name (mirroring the runtime derive's
+    // `CARGO_PKG_NAME` stamp) — NOT the declaring module path.
+    let charge = resolved
         .types
         .iter()
-        .map(|t: &ResolvedType| &t.named_type)
-        .find(|nt| nt.name() == "ChargeError")
+        .find(|t: &&ResolvedType| t.named_type.name() == "ChargeError")
         .expect("ChargeError resolved");
+    assert_eq!(
+        charge.component, "aliased_fixture",
+        "a derive'd type is tagged with the crate name, not a module segment"
+    );
+    let charge_error = &charge.named_type;
 
     let NamedType::TaggedUnion { variants, .. } = charge_error else {
         panic!("ChargeError must be a tagged_union, got {charge_error:?}");

@@ -11,26 +11,22 @@ description = "Driftwatch golden trace corpus: reusable annotated fixture operat
 [dependencies]
 annotations.workspace = true
 artifact.workspace = true
+anyhow.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
 contract.workspace = true
-anyhow.workspace = true
 
 [features]
 # Off by default: a plain build expands the annotations to identity, so the
 # fixture operations compile and emit nothing (and the goldens are skipped).
 # Enabling `trace` turns on emission (macros expand into the runtime buffer).
 # `driftwatch` additionally installs the live root-close emit sink — this is
-# what drives the goldens through the real `trace.otlp.jsonl` file.
+# what drives the goldens through the real `trace.otlp.jsonl` file and, via the
+# default static-resolver emit path, the `registry.json`.
 default = []
 trace = ["annotations/trace"]
 driftwatch = ["annotations/driftwatch"]
-# Additive resolver-emit proof (Phase R). Turns on the annotations `resolve`
-# capability so `tests/resolve_emit.rs` can drive the rust-analyzer-backed
-# registry-emit path over a fixture crate. Implies `driftwatch` for the live
-# emit sink.
-resolve = ["driftwatch", "annotations/resolve"]
 
 [lints]
 workspace = true

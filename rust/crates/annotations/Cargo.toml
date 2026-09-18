@@ -12,7 +12,6 @@ description = "Driftwatch annotation surface: the user-facing facade over the ru
 runtime.workspace = true
 annotations-macros.workspace = true
 artifact = { workspace = true, optional = true }
-extract = { workspace = true, optional = true }
 contract = { workspace = true, optional = true }
 resolver = { workspace = true, optional = true, features = ["ra"] }
 serde_json = { workspace = true, optional = true }
@@ -27,23 +26,16 @@ default = []
 trace = ["annotations-macros/trace"]
 # The live auto-emit path: turns on `trace` emission and pulls in the artifact
 # emitter glue that appends each root-close span tree to `trace.otlp.jsonl`,
-# plus the `extract` derivation + `contract` model that write `registry.json`.
+# plus the rust-analyzer-backed `resolver` (its `ra` feature on) + `contract`
+# model that resolve the target crate and write `registry.json`. The resolver is
+# the default registry-emit path: it resolves the crate at the runtime
+# `CARGO_MANIFEST_DIR` (a `[resolver] source` in `driftwatch.toml` overrides it).
 driftwatch = [
     "trace",
     "dep:artifact",
-    "dep:extract",
     "dep:contract",
-    "dep:serde_json",
-]
-# Additive, opt-in static-resolver emit path (Phase R). Builds on `driftwatch`
-# and pulls in the rust-analyzer-backed `resolver` (its `ra` feature on). It is
-# a *capability*, not a behavior switch: the resolver only produces the registry
-# when a `[resolver] source` is configured in `driftwatch.toml`; with no source
-# configured the emitter still uses the link-time `extract::derive` path, so the
-# default behavior (and the Tier-1 golden) is unchanged even under this feature.
-resolve = [
-    "driftwatch",
     "dep:resolver",
+    "dep:serde_json",
     "resolver/ra",
 ]
 

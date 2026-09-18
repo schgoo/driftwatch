@@ -10,6 +10,27 @@
       "types": [
         {
           "kind": "tagged_union",
+          "name": "ChargeError",
+          "variants": [
+            {
+              "name": "Declined",
+              "payload": {
+                "kind": "record",
+                "fields": [
+                  {
+                    "name": "code",
+                    "type": {
+                      "kind": "primitive",
+                      "name": "i64"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "tagged_union",
           "name": "LookupError",
           "variants": [
             {
@@ -50,7 +71,12 @@
             "result": {
               "kind": "primitive",
               "name": "i64"
-            }
+            },
+            "errors": [
+              {
+                "name": "Error"
+              }
+            ]
           }
         }
       ],
@@ -281,6 +307,103 @@
               "kind": "primitive",
               "name": "i64"
             }
+          }
+        }
+      ],
+      "types": []
+    },
+    {
+      "id": "resolver.pending",
+      "operations": [
+        {
+          "name": "charge",
+          "inputs": [
+            {
+              "name": "cents",
+              "type": {
+                "kind": "primitive",
+                "name": "i64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            },
+            "errors": [
+              {
+                "name": "ChargeError"
+              }
+            ]
+          }
+        },
+        {
+          "name": "elapsed",
+          "inputs": [
+            {
+              "name": "ticks",
+              "type": {
+                "kind": "primitive",
+                "name": "u64"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "u64"
+            }
+          }
+        },
+        {
+          "name": "first_byte",
+          "inputs": [
+            {
+              "name": "text",
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            },
+            "errors": [
+              {
+                "name": "Error"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parse_amount",
+          "inputs": [
+            {
+              "name": "s",
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            }
+          ],
+          "observations": [],
+          "outcomes": {
+            "result": {
+              "kind": "primitive",
+              "name": "i64"
+            },
+            "errors": [
+              {
+                "name": "Error"
+              }
+            ]
           }
         }
       ],

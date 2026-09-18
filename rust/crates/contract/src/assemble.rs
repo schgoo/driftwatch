@@ -7,9 +7,9 @@
 //! output, and wrapping the result in the [`RegistryDocument`] envelope.
 //!
 //! Keeping this seam over a resolved IR ([`ResolvedOperation`]/[`ResolvedType`])
-//! lets a static resolver feed already-resolved contract types straight into
-//! assembly without routing back through the string parsers. The front-half
-//! (string lowering into [`Operation`]/[`NamedType`]) lives in `extract`.
+//! lets the static resolver feed already-resolved contract types straight into
+//! assembly. Both the resolved types and their lowering into
+//! [`Operation`]/[`NamedType`] live here in `contract`.
 //!
 //! ## Component grouping
 //!

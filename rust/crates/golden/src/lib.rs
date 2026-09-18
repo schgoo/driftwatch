@@ -20,11 +20,12 @@
 //! # Fixtures
 //!
 //! - [`aliases`] — an operation returning a foreign aliased `Result` whose error
-//!   channel the current string pipeline cannot see (the Tier-1 acceptance
-//!   case for the upcoming rust-analyzer resolver);
+//!   channel the static resolver recovers through real type inference;
 //! - [`sequential`] — two operations in one scenario, one with an observation;
 //! - [`outcomes`] — the four completion dispositions (result / empty / unit /
 //!   error);
+//! - [`pending`] — alias-hidden channels the resolver recovers (a `Watchable`
+//!   error, foreign-error collisions, an alias→primitive baseline);
 //! - [`values`] — every CTSC §8 value type and edge via `watch_point!`;
 //! - [`dependency`] — an operation with a `watch_dep!` nested call;
 //! - [`faults`] — a panicking operation and a panicking dependency cascade.
@@ -37,6 +38,7 @@ mod aliases;
 mod dependency;
 mod faults;
 mod outcomes;
+mod pending;
 mod sequential;
 mod values;
 
@@ -44,5 +46,9 @@ pub use aliases::first_byte;
 pub use dependency::to_int;
 pub use faults::{boom, cascade_outer};
 pub use outcomes::{LookupError, add, first_even, log_only, lookup};
+pub use pending::{ChargeError, charge, elapsed, parse_amount};
+// `first_byte` also lives in `aliases`; re-export the `pending` one under a
+// distinct name so both stay reachable (the resolver reads the source fn name).
+pub use pending::first_byte as pending_first_byte;
 pub use sequential::{subtotal, with_tax};
 pub use values::value_edges;
