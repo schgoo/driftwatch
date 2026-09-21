@@ -17,7 +17,9 @@ use crate::type_map::{classify_return_ra, type_ref_from_ra};
 /// Inputs come from the parameter list (skipping `self`); the return type is
 /// classified into completion outcomes with alias-resolved result/error types.
 /// Observations and cross-component dependencies are deferred — the acceptance
-/// oracle carries none, and robust macro-token mapping is R-d work.
+/// oracle carries none, and robust `watch_point!`/`watch_dep!` token-tree →
+/// expression mapping is not achievable with proc-macros disabled (spike REPORT
+/// §3–§4 flags both PARTIAL), so they stay empty here.
 pub(crate) fn analyze_function(
     db: &RootDatabase,
     sema: &Semantics<'_, RootDatabase>,
@@ -48,6 +50,8 @@ pub(crate) fn analyze_function(
             name,
             description: None,
             inputs,
+            // TODO(R-e or later): `watch_point!` observations are PARTIAL with
+            // proc-macros disabled (spike REPORT §3); leave empty for now.
             observations: Vec::new(),
             outcomes,
         },

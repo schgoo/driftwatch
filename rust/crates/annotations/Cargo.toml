@@ -14,6 +14,7 @@ annotations-macros.workspace = true
 artifact = { workspace = true, optional = true }
 extract = { workspace = true, optional = true }
 contract = { workspace = true, optional = true }
+resolver = { workspace = true, optional = true, features = ["ra"] }
 serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -33,6 +34,17 @@ driftwatch = [
     "dep:extract",
     "dep:contract",
     "dep:serde_json",
+]
+# Additive, opt-in static-resolver emit path (Phase R). Builds on `driftwatch`
+# and pulls in the rust-analyzer-backed `resolver` (its `ra` feature on). It is
+# a *capability*, not a behavior switch: the resolver only produces the registry
+# when a `[resolver] source` is configured in `driftwatch.toml`; with no source
+# configured the emitter still uses the link-time `extract::derive` path, so the
+# default behavior (and the Tier-1 golden) is unchanged even under this feature.
+resolve = [
+    "driftwatch",
+    "dep:resolver",
+    "resolver/ra",
 ]
 
 [lints]

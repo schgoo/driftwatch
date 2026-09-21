@@ -1,0 +1,14 @@
+[package]
+name = "resolve-target-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# An isolated workspace root so this fixture is not pulled into the outer
+# Driftwatch workspace; rust-analyzer loads it standalone during the resolver
+# emit-path test. It uses only `std`, so `cargo metadata` needs no network.
+[workspace]
+
+[lib]
+name = "resolve_target_fixture"
+path = "src/lib.rs"
