@@ -24,7 +24,8 @@ ra_ap_project_model = { workspace = true, optional = true }
 ra_ap_syntax = { workspace = true, optional = true }
 ra_ap_vfs = { workspace = true, optional = true }
 # A version pin, not a code dependency: forces `unicode-ident` to =1.0.22 so
-# `ra-ap-rustc_lexer` does not panic at compile time (REPORT §8).
+# `ra-ap-rustc_lexer` does not panic at compile time on a Unicode-version
+# mismatch with `unicode-properties` (REPORT §8).
 unicode-ident = { workspace = true, optional = true }
 
 [features]
