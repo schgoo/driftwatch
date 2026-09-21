@@ -4,9 +4,9 @@
 //! library to statically resolve a target crate's annotated operations and
 //! `#[derive(Watchable)]` types into the **already-resolved** contract IR:
 //! [`contract::ResolvedOperation`] / [`contract::ResolvedType`]. It is the
-//! type-aware replacement for the alias-blind string front-half in `extract`:
-//! real type inference sees through `type` aliases and foreign `Result` aliases
-//! (`io::Result`, `anyhow::Result`) that the string pipeline cannot, recovering
+//! type-aware successor to the retired alias-blind string pipeline: real type
+//! inference sees through `type` aliases and foreign `Result` aliases
+//! (`io::Result`, `anyhow::Result`) that a string classifier cannot, recovering
 //! the hidden error channels.
 //!
 //! The output feeds straight into [`contract::assemble`]: each

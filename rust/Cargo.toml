@@ -74,10 +74,8 @@ quote = "1"
 proc-macro2 = "1"
 # Internal crates wired together by the annotation facade.
 runtime = { path = "crates/runtime" }
-# The CTSC registry contract model the extraction driver derives into.
+# The CTSC registry contract model the resolver assembles into.
 contract = { path = "crates/contract" }
-# The extraction driver: derives a registry document from runtime discovery.
-extract = { path = "crates/extract" }
 annotations-macros = { path = "crates/annotations-macros" }
 annotations = { path = "crates/annotations" }
 artifact = { path = "crates/artifact" }
@@ -90,9 +88,10 @@ serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 # TOML parser for the driftwatch.toml capture config.
 toml = "0.8"
-# Genuinely foreign error type for the resolver-oracle harness (dev-only): its
-# opaque `anyhow::Error` cannot derive `Watchable`, so it exercises foreign
-# error-channel recovery — see `crates/golden/tests/resolver_pending.rs`.
+# Genuinely foreign error type for the `golden` corpus: its opaque
+# `anyhow::Error` cannot derive `Watchable`, so `parse_amount` exercises
+# foreign error-channel recovery through the resolver — see
+# `crates/golden/src/pending.rs`.
 anyhow = "1"
 
 # rust-analyzer as a library: the static resolver's real type-inference engine,

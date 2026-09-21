@@ -50,7 +50,6 @@ readme:
     cd rust && cargo doc2readme -p artifact --lib --template crates/README.j2 --out crates/artifact/README.md
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md
-    cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md
     cd rust && cargo doc2readme -p golden --lib --template crates/README.j2 --out crates/golden/README.md
     cd rust && cargo doc2readme -p resolver --lib --template crates/README.j2 --out crates/resolver/README.md
     cd rust && cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md
@@ -62,7 +61,6 @@ readme-check:
     cd rust && cargo doc2readme -p artifact --lib --template crates/README.j2 --out crates/artifact/README.md --check
     cd rust && cargo doc2readme -p contract --lib --template crates/README.j2 --out crates/contract/README.md --check
     cd rust && cargo doc2readme -p diff --lib --template crates/README.j2 --out crates/diff/README.md --check
-    cd rust && cargo doc2readme -p extract --lib --template crates/README.j2 --out crates/extract/README.md --check
     cd rust && cargo doc2readme -p golden --lib --template crates/README.j2 --out crates/golden/README.md --check
     cd rust && cargo doc2readme -p resolver --lib --template crates/README.j2 --out crates/resolver/README.md --check
     cd rust && cargo doc2readme -p runtime --lib --template crates/README.j2 --out crates/runtime/README.md --check

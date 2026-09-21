@@ -6,9 +6,9 @@ use std::collections::BTreeSet;
 use contract::{Field, NamedType, ResolvedType, TypeRef, Variant};
 use ra_ap_hir::{DisplayTarget, Semantics};
 use ra_ap_ide_db::RootDatabase;
-use ra_ap_syntax::{AstNode, ast};
+use ra_ap_syntax::ast;
 
-use crate::component::component_for;
+use crate::component::crate_component;
 use crate::type_map::type_ref_from_ra;
 
 /// Resolve one `#[derive(Watchable)]` struct into a record [`ResolvedType`].
@@ -34,12 +34,7 @@ pub(crate) fn analyze_struct(
         })
         .collect();
     Some(ResolvedType {
-        component: component_for(
-            db,
-            display_target,
-            ast_struct.syntax(),
-            Some(def.module(db)),
-        ),
+        component: crate_component(db, def.module(db)),
         named_type: NamedType::Record {
             name,
             fields,
@@ -85,7 +80,7 @@ pub(crate) fn analyze_enum(
         })
         .collect();
     Some(ResolvedType {
-        component: component_for(db, display_target, ast_enum.syntax(), Some(def.module(db))),
+        component: crate_component(db, def.module(db)),
         named_type: NamedType::TaggedUnion {
             name,
             variants,
