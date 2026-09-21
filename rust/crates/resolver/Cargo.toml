@@ -1,0 +1,44 @@
+[package]
+name = "resolver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Driftwatch static resolver: rust-analyzer-backed resolution of annotated operations/types into the already-resolved contract IR."
+
+[lints]
+workspace = true
+
+[dependencies]
+contract.workspace = true
+# rust-analyzer as a library, behind the `ra` feature (default OFF). With `ra`
+# off the crate still compiles (API types present) and `resolve` returns
+# `ResolveError::Unavailable`; with `ra` on, resolution is real.
+ra_ap_hir = { workspace = true, optional = true }
+ra_ap_ide = { workspace = true, optional = true }
+ra_ap_ide_db = { workspace = true, optional = true }
+ra_ap_load-cargo = { workspace = true, optional = true }
+ra_ap_project_model = { workspace = true, optional = true }
+ra_ap_syntax = { workspace = true, optional = true }
+ra_ap_vfs = { workspace = true, optional = true }
+# A version pin, not a code dependency: forces `unicode-ident` to =1.0.22 so
+# `ra-ap-rustc_lexer` does not panic at compile time on a Unicode-version
+# mismatch with `unicode-properties` (REPORT §8).
+unicode-ident = { workspace = true, optional = true }
+
+[features]
+# When enabled, RA resolution is real; when disabled, the heavy/pinned RA deps
+# are absent from the build. R-d wires `extract`'s trace/extraction feature to
+# forward `resolver/ra`.
+ra = [
+    "dep:ra_ap_hir",
+    "dep:ra_ap_ide",
+    "dep:ra_ap_ide_db",
+    "dep:ra_ap_load-cargo",
+    "dep:ra_ap_project_model",
+    "dep:ra_ap_syntax",
+    "dep:ra_ap_vfs",
+    "dep:unicode-ident",
+]

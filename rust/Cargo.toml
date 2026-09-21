@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.96.0"
+rust-version = "1.98"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/schgoo/driftwatch"
 authors = ["Driftwatch contributors"]
@@ -81,6 +81,8 @@ extract = { path = "crates/extract" }
 annotations-macros = { path = "crates/annotations-macros" }
 annotations = { path = "crates/annotations" }
 artifact = { path = "crates/artifact" }
+# The RA-backed static resolver (feature-gated); consumed downstream in R-d.
+resolver = { path = "crates/resolver" }
 # JSON assembly for the artifact emitter; also parses discovery output in tests.
 serde_json = "1"
 # Derive-based de/serialization for the CTSC registry contract model.
@@ -92,3 +94,28 @@ toml = "0.8"
 # opaque `anyhow::Error` cannot derive `Watchable`, so it exercises foreign
 # error-channel recovery — see `crates/golden/tests/resolver_pending.rs`.
 anyhow = "1"
+
+# rust-analyzer as a library: the static resolver's real type-inference engine,
+# behind the `resolver/ra` feature (default OFF) so the heavy/pinned RA deps stay
+# out of the default workspace build. Pinned to =0.0.352 (msrv rustc 1.98, which
+# this workspace now targets — see `rust-version`). See
+# docs/spikes/ra-extract/REPORT.md §8.
+#
+# Lock-only companion pin (do NOT add a direct dependency): `Cargo.lock` holds
+# `salsa`/`salsa-macros`/`salsa-macro-rules` at 0.28.2. 0.28.4 changes the
+# interned-struct/`intern` API (an extra `intern` argument) and fails to compile
+# `ra_ap_span 0.0.352`, so a `cargo update` that touches salsa must re-pin
+# `--precise 0.28.2`.
+ra_ap_hir = "=0.0.352"
+ra_ap_ide = "=0.0.352"
+ra_ap_ide_db = "=0.0.352"
+ra_ap_load-cargo = "=0.0.352"
+ra_ap_project_model = "=0.0.352"
+ra_ap_syntax = "=0.0.352"
+ra_ap_vfs = "=0.0.352"
+# Version pin (not a code dependency): `ra-ap-rustc_lexer` panics at compile
+# time unless `unicode-ident` and `unicode-properties` agree on their Unicode
+# version. `unicode-properties 0.1.4` is Unicode 17.0.0, but `unicode-ident`
+# floats to 1.0.25+ (Unicode 18.0.0), which trips the panic — so pin
+# `unicode-ident` to =1.0.22 (Unicode 17.0.0). See REPORT §8.
+unicode-ident = "=1.0.22"

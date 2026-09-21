@@ -1,5 +1,9 @@
 # Rust
 /rust/target/
+# Nested build output from in-crate test fixtures (their own workspaces).
+**/tests/fixtures/**/target/
+# Generated lockfiles for fixture workspaces (their sources are tracked, not their locks).
+**/tests/fixtures/**/Cargo.lock
 **/*.rs.bk
 
 # C#
